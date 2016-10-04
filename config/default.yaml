@@ -11,11 +11,7 @@ gamesh:
   steiner_grid_side_length: 280.0
   manifold_update_every: 1
   initial_manifold_update_skip: 2
-<<<<<<< HEAD
-  save_manifold_every: 32
-=======
   save_manifold_every: 1
->>>>>>> 9ba05b471d2d8fdc18b062948bfd4d804d31fcd1
   primary_points_visibility_threshold: 1
   all_sort_of_output: false
   fake_points_multiplier: 0
