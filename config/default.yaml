@@ -1,5 +1,5 @@
 gamesh:
-  inverse_conic_enabled: false
+  inverse_conic_enabled: true
   enable_suboptimal_policy: false
   suboptimal_method: 0
   w_1: 10.0
@@ -9,10 +9,10 @@ gamesh:
   max_distance_cam_feature: 40.0
   steiner_grid_step_length: 20.0
   steiner_grid_side_length: 280.0
-  manifold_update_every: 4
+  manifold_update_every: 1
   initial_manifold_update_skip: 2
-  save_manifold_every: 32
-  primary_points_visibility_threshold: 2
+  save_manifold_every: 1
+  primary_points_visibility_threshold: 1
   all_sort_of_output: false
-  fake_points_multiplier: 3
+  fake_points_multiplier: 0
   update_points_position: false
