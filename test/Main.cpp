@@ -39,6 +39,8 @@
 
 #define GAMESH_RAYS_TOPIC "gamesh_rays"
 
+int numPointsPerCamera = 200;
+
 long unsigned int nextPointId_ = 0;
 std::queue<CameraType*> newCameras_;
 CameraPointsCollection cameraPoints_;
@@ -61,9 +63,15 @@ void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 	cameraPoints_.addCamera(camera);
 	camera->center = glm::vec3(msg->camera_pose.position.x, msg->camera_pose.position.y, msg->camera_pose.position.z);
 	
-	for (auto pclPoint : pointCloud.points) {
+	int numPointsAdded = 0;
+//	for (auto pclPoint : pointCloud.points) {
+	for(int i=0; i<pointCloud.points.size(); i++){
+		if( i % (pointCloud.points.size()/numPointsPerCamera) ) continue;
+				
+		auto pclPoint = pointCloud.points[i];
 		
 		long unsigned int pointId = nextPointId_++; //TODO manage identified points
+		numPointsAdded++;
 		
 		PointType* point;
 		
@@ -82,10 +90,12 @@ void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 	}
 	
 	newCameras_.push(camera);
-	std::cout << "newCameras length: " << newCameras_.size() << std::endl;
+	std::cout << "newCameras length: \t" << newCameras_.size() << "\t numPointsAdded: \t" << numPointsAdded << std::endl;
 }
 
 int main(int argc, char **argv) {
+	std::cout << "pwd: \t" << argv[0] << std::endl;
+	
 	utilities::Logger log;
 	ManifoldReconstructionConfig confManif;
 	int maxIterations_ = 0;
@@ -144,7 +154,7 @@ int main(int argc, char **argv) {
 			}
 			
 			m.updateManifold();
-			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold("output/", "current");
+			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold("/home/enrico/gamesh_output", "current");
 			//if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold("output/partial/", std::to_string(m.iterationCount));
 			
 			log.endEventAndPrint("main loop\t\t\t\t\t\t", true);
@@ -160,7 +170,7 @@ int main(int argc, char **argv) {
 	// Do a last manifold update in case op.numCameras() isn't a multiple of confManif.manifold_update_every
 	if (m.iterationCount > confManif.initial_manifold_update_skip) m.updateManifold();
 	
-	m.saveManifold("output/", "final");
+	m.saveManifold("/home/enrico/gamesh_output", "final");
 	
 	log.endEventAndPrint("main\t\t\t\t\t\t", true);
 	
