@@ -2199,78 +2199,9 @@ void ManifoldMeshReconstructor::updateDistanceAndWeights(std::vector<Delaunay3::
 	}
 }
 
-int ManifoldMeshReconstructor::moveVertex_WHeuristic(int idxPoint, int idxCam) { //TODO use buffered point's position (newPosition, etc), etc
-
-	std::set<Delaunay3::Cell_handle> setNewCells;
-	Delaunay3::Vertex_handle hndlQ = points_[idxPoint].vertexHandle;
-
-	PointD3 initialPosition = hndlQ->point();
-	PointD3 pd3NewPoint = points_[idxPoint].position;
-	PointD3 camPosition = cams_[idxCam].position;
-
-	if (utilities::distanceEucl(pd3NewPoint, camPosition) < conf_.maxDistanceCamFeature) {
-
-		/********************** Step 1: find the cells incident to the vertex to be removed*****************/
-		std::vector<Delaunay3::Cell_handle> setIncidentCells;
-		dt_.incident_cells(hndlQ, std::back_inserter(setIncidentCells));
-
-		//store their weights
-		std::vector<std::pair<PointD3, float> > vecDistanceWeight, vecDistanceWeight2;
-		for (auto it : setIncidentCells) {
-			PointD3 temp = CGAL::barycenter(it->vertex(0)->point(), 1.0, it->vertex(1)->point(), 1.0, it->vertex(2)->point(), 1.0, it->vertex(3)->point(), 1.0);
-			vecDistanceWeight.push_back(std::pair<PointD3, float>(temp, (float) it->info().getVoteCountProb()));
-		}
-
-		/**********************Step 2: raytracing to update the weights before the  point removal****************/
-		for (int curCam : points_[idxPoint].viewingCams) {
-			Segment QO = Segment(hndlQ->point(), cams_[curCam].position);
-			rayTracing(curCam, idxPoint, false, false);
-		}
-
-		/************Step 3: remove the point and update the new cells weights according to the information on the
-		 * weights collected in the previous step****************/
-		// stored previously
-		std::vector<Delaunay3::Cell_handle> newCells;
-		dt_.remove_and_give_new_cells(hndlQ, std::back_inserter(newCells));
-
-		updateDistanceAndWeights(newCells, vecDistanceWeight);
-
-		/***********Step 4: Locate the point and remove conflicting tetrahedra****************/
-		Delaunay3::Locate_type lt;
-		int li, lj;
-		Delaunay3::Cell_handle c = dt_.locate(pd3NewPoint, lt, li, lj);
-		if (lt == Delaunay3::VERTEX) {
-			std::cerr << "Error in FreespaceDelaunayManifold::moveVertex(): Attempted to move a vertex to an already existing vertex location" << std::endl;
-			return false;
-		}
-
-		// Get the cells that conflict in a vector vecConflictCells, and a facet on the boundary of this hole in f.
-		std::vector<Delaunay3::Cell_handle> vecConflictCells;
-		Delaunay3::Facet f;
-		dt_.find_conflicts(pd3NewPoint, c, CGAL::Oneset_iterator<Delaunay3::Facet>(f), std::back_inserter(vecConflictCells));
-
-		for (auto it : vecConflictCells) {
-			PointD3 temp = CGAL::barycenter(it->vertex(0)->point(), 1.0, it->vertex(1)->point(), 1.0, it->vertex(2)->point(), 1.0, it->vertex(3)->point(), 1.0);
-			vecDistanceWeight2.push_back(std::pair<PointD3, float>(temp, (float) it->info().getVoteCountProb()));
-		}
-
-		/**********Step 5: Add the new (moved) tets****************/
-		hndlQ = dt_.insert_in_hole(pd3NewPoint, vecConflictCells.begin(), vecConflictCells.end(), f.first, f.second);
-		points_[idxPoint].vertexHandle = hndlQ;
-
-		/**********Step 6 update the weights of the new tetrahedra****************/
-		updateDistanceAndWeights(newCells, vecDistanceWeight2);
-
-		/**********Step 7 raytracing to update the weights after point insertion****************/
-		for (int curCam : points_[idxPoint].viewingCams) {
-			Segment QO = Segment(hndlQ->point(), cams_[curCam].position);
-			rayTracing(curCam, idxPoint, false, true);
-		}
-
-		return true;
-	} else {
-		return false;
-	}
+int ManifoldMeshReconstructor::moveVertex_WHeuristic(int idxPoint, int idxCam) {
+	cerr << "ManifoldMeshReconstructor::moveVertex_WHeuristic:\tDo not use" << endl;
+	return false;
 }
 
 int ManifoldMeshReconstructor::moveVertex(int idxPoint) {

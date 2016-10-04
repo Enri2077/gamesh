@@ -12,7 +12,7 @@ gamesh:
   manifold_update_every: 4
   initial_manifold_update_skip: 2
   save_manifold_every: 32
-  primary_points_visibility_threshold: 2
+  primary_points_visibility_threshold: 1
   all_sort_of_output: false
   fake_points_multiplier: 3
   update_points_position: false
