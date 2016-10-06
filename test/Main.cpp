@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
 			}
 			
 			m.updateManifold();
-			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold("/home/enrico/gamesh_output", "current");
+			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold("/home/airlab/gamesh_output/", "current");
 			//if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold("output/partial/", std::to_string(m.iterationCount));
 			
 			log.endEventAndPrint("main loop\t\t\t\t\t\t", true);
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
 	// Do a last manifold update in case op.numCameras() isn't a multiple of confManif.manifold_update_every
 	if (m.iterationCount > confManif.initial_manifold_update_skip) m.updateManifold();
 	
-	m.saveManifold("/home/enrico/gamesh_output", "final");
+	m.saveManifold("/home/airlab/gamesh_output/", "final");
 	
 	log.endEventAndPrint("main\t\t\t\t\t\t", true);
 	
