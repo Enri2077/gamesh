@@ -162,19 +162,21 @@ void ManifoldManager::shrinkManifold3(const std::set<PointD3>& points, const flo
 			tetNotCarved.clear();
 		}
 	}
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t lastEnclosingPointCache:\t\t" << chronoLastEnclosingPointCache.getMicroseconds() << " µs" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t queue inserting:\t\t\t" << chronoQueueInserting.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t queue popping:\t\t\t\t" << chronoQueuePopping.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t inserting:\t\t\t\t" << chronoInserting.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t enclosing:\t\t\t\t" << chronoEnclosing.getSeconds() << " s\t / \t" << countTotal << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t test:\t\t\t\t\t" << chronoTesting.getSeconds() << " s\t / \t" << countInEnclosingVolume << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t shrink:\t\t\t\t" << chronoShrinking.getSeconds() << " s\t / \t" << countShrinked << endl;
-//	cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
-	cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countSuccessfulEnclosingVersionCache:\t\t\t" << countSuccessfulEnclosingVersionCache << "\t / \t" << countTotal << endl;
-	cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countSuccessfulLastEnclosingPointCache:\t\t" << countSuccessfulLastEnclosingPointCache << "\t / \t" << countTotal - countSuccessfulEnclosingVersionCache << endl;
-	cout << "ManifoldManager::shrinkManifold3:\t\t\t\t number_of_finite_cells:\t\t" << dt_.number_of_finite_cells() << endl;
 
+	if(conf_.time_stats_output){
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t lastEnclosingPointCache:\t\t" << chronoLastEnclosingPointCache.getMicroseconds() << " µs" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t queue inserting:\t\t\t" << chronoQueueInserting.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t queue popping:\t\t\t\t" << chronoQueuePopping.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t inserting:\t\t\t\t" << chronoInserting.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t enclosing:\t\t\t\t" << chronoEnclosing.getSeconds() << " s\t / \t" << countTotal << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t test:\t\t\t\t\t" << chronoTesting.getSeconds() << " s\t / \t" << countInEnclosingVolume << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t shrink:\t\t\t\t" << chronoShrinking.getSeconds() << " s\t / \t" << countShrinked << endl;
+	//	cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
+		cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countSuccessfulEnclosingVersionCache:\t\t\t" << countSuccessfulEnclosingVersionCache << "\t / \t" << countTotal << endl;
+		cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countSuccessfulLastEnclosingPointCache:\t\t" << countSuccessfulLastEnclosingPointCache << "\t / \t" << countTotal - countSuccessfulEnclosingVersionCache << endl;
+		cout << "ManifoldManager::shrinkManifold3:\t\t\t\t number_of_finite_cells:\t\t" << dt_.number_of_finite_cells() << endl;
+	}
 }
 
 void ManifoldManager::shrinkSeveralAtOnce3(const std::set<PointD3>& points, const float &maxPointToPointDistance, long currentEnclosingVersion) {
@@ -280,13 +282,14 @@ void ManifoldManager::shrinkSeveralAtOnce3(const std::set<PointD3>& points, cons
 		}
 	}
 
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t queue popping:\t\t\t\t" << chronoQueuePopping.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t enclosing:\t\t\t\t" << chronoEnclosing.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t addAndCheckManifoldness:\t\t" << chronoAddAndCheckManifoldness.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t isRegular:\t\t\t\t" << functionProfileChronometer_isRegular_.getSeconds() << " s\t / \t" << functionProfileCounter_isRegular_ << endl;
-//	cout << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
-
+	if(conf_.time_stats_output){
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t queue popping:\t\t\t\t" << chronoQueuePopping.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t enclosing:\t\t\t\t" << chronoEnclosing.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t addAndCheckManifoldness:\t\t" << chronoAddAndCheckManifoldness.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t isRegular:\t\t\t\t" << functionProfileChronometer_isRegular_.getSeconds() << " s\t / \t" << functionProfileCounter_isRegular_ << endl;
+	//	cout << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
+	}
 }
 
 void ManifoldManager::regionGrowingBatch3(Delaunay3::Cell_handle& startingCell, const std::set<PointD3>& points) {
@@ -417,15 +420,16 @@ void ManifoldManager::regionGrowingProcedure3(const std::set<PointD3>& points) {
 //	if (tetsQueue.size()) cerr << "ManifoldManager::regionGrowingProcedure3: \t\t exiting while queue not empty" << endl;
 	tetsQueue.clear();
 
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t queue inserting:\t\t\t" << chronoQueueInserting.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t queue popping:\t\t\t\t" << chronoQueuePopping.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t inserting:\t\t\t\t" << chronoInserting.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t test:\t\t\t\t\t" << chronoTesting.getSeconds() << " s\t / \t" << countTotal << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t grow:\t\t\t\t\t" << chronoGrowing.getSeconds() << " s\t / \t" << countGrowned << endl;
-//	cout << "ManifoldManager::regionGrowingProcedure3:\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
-	cout << "ManifoldManager::regionGrowingProcedure3:\t\t\t number_of_finite_cells:\t\t" << dt_.number_of_finite_cells() << endl;
-
+	if(conf_.time_stats_output){
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t queue inserting:\t\t\t" << chronoQueueInserting.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t queue popping:\t\t\t\t" << chronoQueuePopping.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t inserting:\t\t\t\t" << chronoInserting.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t test:\t\t\t\t\t" << chronoTesting.getSeconds() << " s\t / \t" << countTotal << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t grow:\t\t\t\t\t" << chronoGrowing.getSeconds() << " s\t / \t" << countGrowned << endl;
+	//	cout << "ManifoldManager::regionGrowingProcedure3:\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
+		cout << "ManifoldManager::regionGrowingProcedure3:\t\t\t number_of_finite_cells:\t\t" << dt_.number_of_finite_cells() << endl;
+	}
 }
 
 void ManifoldManager::growSeveralAtOnce3(const std::set<PointD3>& points) {
@@ -502,11 +506,12 @@ void ManifoldManager::growSeveralAtOnce3(const std::set<PointD3>& points) {
 
 	chronoRemoveAndCheckManifoldness.stop();
 
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t queue init:\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t remove and check manifoldness:\t\t" << chronoRemoveAndCheckManifoldness.getSeconds() << " s" << endl;
-	cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t isRegular:\t\t\t\t" << functionProfileChronometer_isRegular_.getSeconds() << " s\t / \t" << functionProfileCounter_isRegular_ << endl;
-	cout << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t successfully growned:\t\t\t" << countSuccess << "\t / \t" << countTotal << endl;
-
+	if(conf_.time_stats_output){
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t queue init:\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t remove and check manifoldness:\t\t" << chronoRemoveAndCheckManifoldness.getSeconds() << " s" << endl;
+		cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t isRegular:\t\t\t\t" << functionProfileChronometer_isRegular_.getSeconds() << " s\t / \t" << functionProfileCounter_isRegular_ << endl;
+		cout << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t successfully growned:\t\t\t" << countSuccess << "\t / \t" << countTotal << endl;
+	}
 }
 
 bool ManifoldManager::addSeveralAndCheckManifoldness2(Delaunay3::Cell_handle& currentTet, int curIdx) {
@@ -614,7 +619,7 @@ void ManifoldManager::addTetAndUpdateBoundary2(Delaunay3::Cell_handle& currentTe
 
 //add the current tetrahedron in the manifold set and add it to the boundary if needed
 	currentTet->info().setKeptManifold(true);
-	currentTet->info().setShrinked(false);
+//	currentTet->info().setShrinked(false);
 
 	std::vector<int> notManifoldNeigh;
 	if (isInBoundary(currentTet, notManifoldNeigh)) {
@@ -660,7 +665,7 @@ void ManifoldManager::subTetAndUpdateBoundary2(Delaunay3::Cell_handle& currentTe
 
 	currentTet->info().setKeptManifold(false);
 
-	currentTet->info().setShrinked(true);
+//	currentTet->info().setShrinked(true);
 
 	// Check for each neighbour whether it should belong to the boundary set
 	for (int curNeighId = 0; curNeighId < 4; ++curNeighId) {
@@ -846,19 +851,19 @@ bool ManifoldManager::removeFromBoundary(Delaunay3::Cell_handle& cellToBeRemoved
 	}
 }
 
-bool ManifoldManager::checkManifoldness(Delaunay3::Cell_handle &cellToTest1, int idxNeigh) {
-	Delaunay3::Vertex_handle v = cellToTest1->vertex(idxNeigh);
-	Delaunay3::Cell_handle curTetNeigh = cellToTest1->neighbor(idxNeigh);
-
-	if (!isRegular(v)) return false;
-
-	for (int curNei = 0; curNei < 4; ++curNei) {
-		Delaunay3::Vertex_handle vC = curTetNeigh->vertex(curNei);
-
-		if (!isRegular(vC)) return false;
-	}
-	return true;
-}
+//bool ManifoldManager::checkManifoldness(Delaunay3::Cell_handle &cellToTest1, int idxNeigh) {
+//	Delaunay3::Vertex_handle v = cellToTest1->vertex(idxNeigh);
+//	Delaunay3::Cell_handle curTetNeigh = cellToTest1->neighbor(idxNeigh);
+//
+//	if (!isRegular(v)) return false;
+//
+//	for (int curNei = 0; curNei < 4; ++curNei) {
+//		Delaunay3::Vertex_handle vC = curTetNeigh->vertex(curNei);
+//
+//		if (!isRegular(vC)) return false;
+//	}
+//	return true;
+//}
 
 bool ManifoldManager::isRegularProfiled(Delaunay3::Vertex_handle &v) {
 	functionProfileCounter_isRegular_++;
@@ -1017,63 +1022,63 @@ bool ManifoldManager::isFreespace(Delaunay3::Cell_handle &cell) {
 	return value;
 }
 
-bool ManifoldManager::additionTest(Delaunay3::Cell_handle &cell) {
-
-	bool additionManifold;
-
-	int numV = 0;
-	int numFound = 0;
-
-	for (int curVertexId = 0; curVertexId < 4; ++curVertexId) {
-
-		if (cell->vertex(curVertexId)->info().isUsed() > 0) {
-			numFound++;
-		}
-
-	}
-	numV = numFound;
-	int numE = 0;
-	for (int curEdgeId1 = 0; curEdgeId1 < 4; ++curEdgeId1) {
-		for (int curEdgeId2 = curEdgeId1 + 1; curEdgeId2 < 4; ++curEdgeId2) {
-			bool intersectionFound = false;
-			Delaunay3::Edge curEdge(cell, curEdgeId1, curEdgeId2);
-
-			Delaunay3::Cell_circulator cellCirc = dt_.incident_cells(curEdge, cell);
-			Delaunay3::Cell_circulator cellCircInit = dt_.incident_cells(curEdge, cell);
-
-			do {
-				if (cellCirc->info().iskeptManifold()) {
-					intersectionFound = true;
-				}
-				cellCirc++;
-			} while (cellCirc != cellCircInit);
-
-			if (intersectionFound) {
-				numE++;
-			}
-		}
-	}
-
-	int numF = 0;
-	for (int curNeighId = 0; curNeighId < 4; ++curNeighId) {
-		bool intersectionFound = false;
-
-		if (cell->neighbor(curNeighId)->info().iskeptManifold()) {
-			intersectionFound = true;
-		}
-		if (intersectionFound) {
-			numF++;
-		}
-	}
-
-	if ((numV == 0 && numE == 0 && numF == 0) || (numV == 3 && numE == 3 && numF == 1) || (numV == 4 && numE == 5 && numF == 2) || (numV == 4 && numE == 6 && numF == 3) || (numV == 4 && numE == 6 && numF == 4)) {
-		additionManifold = true;
-	} else {
-		additionManifold = false;
-	}
-	return additionManifold;
-
-}
+//bool ManifoldManager::additionTest(Delaunay3::Cell_handle &cell) {
+//
+//	bool additionManifold;
+//
+//	int numV = 0;
+//	int numFound = 0;
+//
+//	for (int curVertexId = 0; curVertexId < 4; ++curVertexId) {
+//
+//		if (cell->vertex(curVertexId)->info().isUsed() > 0) {
+//			numFound++;
+//		}
+//
+//	}
+//	numV = numFound;
+//	int numE = 0;
+//	for (int curEdgeId1 = 0; curEdgeId1 < 4; ++curEdgeId1) {
+//		for (int curEdgeId2 = curEdgeId1 + 1; curEdgeId2 < 4; ++curEdgeId2) {
+//			bool intersectionFound = false;
+//			Delaunay3::Edge curEdge(cell, curEdgeId1, curEdgeId2);
+//
+//			Delaunay3::Cell_circulator cellCirc = dt_.incident_cells(curEdge, cell);
+//			Delaunay3::Cell_circulator cellCircInit = dt_.incident_cells(curEdge, cell);
+//
+//			do {
+//				if (cellCirc->info().iskeptManifold()) {
+//					intersectionFound = true;
+//				}
+//				cellCirc++;
+//			} while (cellCirc != cellCircInit);
+//
+//			if (intersectionFound) {
+//				numE++;
+//			}
+//		}
+//	}
+//
+//	int numF = 0;
+//	for (int curNeighId = 0; curNeighId < 4; ++curNeighId) {
+//		bool intersectionFound = false;
+//
+//		if (cell->neighbor(curNeighId)->info().iskeptManifold()) {
+//			intersectionFound = true;
+//		}
+//		if (intersectionFound) {
+//			numF++;
+//		}
+//	}
+//
+//	if ((numV == 0 && numE == 0 && numF == 0) || (numV == 3 && numE == 3 && numF == 1) || (numV == 4 && numE == 5 && numF == 2) || (numV == 4 && numE == 6 && numF == 3) || (numV == 4 && numE == 6 && numF == 4)) {
+//		additionManifold = true;
+//	} else {
+//		additionManifold = false;
+//	}
+//	return additionManifold;
+//
+//}
 
 bool ManifoldManager::singleTetTest2(Delaunay3::Cell_handle& cell) {
 	bool iskeptManif = cell->info().iskeptManifold();
@@ -1174,59 +1179,59 @@ bool ManifoldManager::singleTetTest2(Delaunay3::Cell_handle& cell) {
 	}
 
 }
-
-bool ManifoldManager::subtractionTest(Delaunay3::Cell_handle &i) {
-
-	bool subtractionManifold;
-
-	int numV = 0;
-	int numFound = 0;
-	bool iskeptManif = i->info().iskeptManifold();
-
-	for (int curVertexId = 0; curVertexId < 4; ++curVertexId) {
-
-		if (i->vertex(curVertexId)->info().isNotUsed()) {
-			numFound++;
-		}
-	}
-	numV = numFound;
-
-	int numE = 0;
-	for (int curEdgeId1 = 0; curEdgeId1 < 4; ++curEdgeId1) {
-		for (int curEdgeId2 = curEdgeId1 + 1; curEdgeId2 < 4; ++curEdgeId2) {
-			bool intersectionFound = false;
-			Delaunay3::Edge curEdge(i, curEdgeId1, curEdgeId2);
-
-			Delaunay3::Cell_circulator cellCirc = dt_.incident_cells(curEdge, i);
-			Delaunay3::Cell_circulator cellCircInit = dt_.incident_cells(curEdge, i);
-
-			do {
-				if (cellCirc->info().iskeptManifold() != iskeptManif) {
-					intersectionFound = true;
-				}
-				cellCirc++;
-			} while (cellCirc != cellCircInit && intersectionFound == false);
-
-			if (intersectionFound) {
-				numE++;
-			}
-		}
-	}
-
-	/*COUNT NUM Facets in the intersection between tet cell and the current manifold*/
-	int numF = 0;
-	for (int curNeighId = 0; curNeighId < 4; ++curNeighId) {
-		bool intersectionFound = false;
-
-		if (i->neighbor(curNeighId)->info().iskeptManifold() != iskeptManif) {
-			numF++;
-		}
-	}
-	if ((numV == 0 && numE == 0 && numF == 0) || (numV == 3 && numE == 3 && numF == 1) || (numV == 4 && numE == 5 && numF == 2) || (numV == 4 && numE == 6 && numF == 3) || (numV == 4 && numE == 6 && numF == 4)) {
-		subtractionManifold = true;
-	} else {
-		subtractionManifold = false;
-	}
-	return subtractionManifold;
-
-}
+//
+//bool ManifoldManager::subtractionTest(Delaunay3::Cell_handle &i) {
+//
+//	bool subtractionManifold;
+//
+//	int numV = 0;
+//	int numFound = 0;
+//	bool iskeptManif = i->info().iskeptManifold();
+//
+//	for (int curVertexId = 0; curVertexId < 4; ++curVertexId) {
+//
+//		if (i->vertex(curVertexId)->info().isNotUsed()) {
+//			numFound++;
+//		}
+//	}
+//	numV = numFound;
+//
+//	int numE = 0;
+//	for (int curEdgeId1 = 0; curEdgeId1 < 4; ++curEdgeId1) {
+//		for (int curEdgeId2 = curEdgeId1 + 1; curEdgeId2 < 4; ++curEdgeId2) {
+//			bool intersectionFound = false;
+//			Delaunay3::Edge curEdge(i, curEdgeId1, curEdgeId2);
+//
+//			Delaunay3::Cell_circulator cellCirc = dt_.incident_cells(curEdge, i);
+//			Delaunay3::Cell_circulator cellCircInit = dt_.incident_cells(curEdge, i);
+//
+//			do {
+//				if (cellCirc->info().iskeptManifold() != iskeptManif) {
+//					intersectionFound = true;
+//				}
+//				cellCirc++;
+//			} while (cellCirc != cellCircInit && intersectionFound == false);
+//
+//			if (intersectionFound) {
+//				numE++;
+//			}
+//		}
+//	}
+//
+//	/*COUNT NUM Facets in the intersection between tet cell and the current manifold*/
+//	int numF = 0;
+//	for (int curNeighId = 0; curNeighId < 4; ++curNeighId) {
+//		bool intersectionFound = false;
+//
+//		if (i->neighbor(curNeighId)->info().iskeptManifold() != iskeptManif) {
+//			numF++;
+//		}
+//	}
+//	if ((numV == 0 && numE == 0 && numF == 0) || (numV == 3 && numE == 3 && numF == 1) || (numV == 4 && numE == 5 && numF == 2) || (numV == 4 && numE == 6 && numF == 3) || (numV == 4 && numE == 6 && numF == 4)) {
+//		subtractionManifold = true;
+//	} else {
+//		subtractionManifold = false;
+//	}
+//	return subtractionManifold;
+//
+//}
