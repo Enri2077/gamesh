@@ -37,6 +37,7 @@ typedef struct {
   int initial_manifold_update_skip;
   int save_manifold_every;
   int primary_points_visibility_threshold;
+  int numPointsPerCamera;
 
   int fake_points_multiplier;
 
@@ -66,6 +67,7 @@ typedef struct {
     out << "initial_manifold_update_skip: " << initial_manifold_update_skip << std::endl;
     out << "save_manifold_every: " << save_manifold_every << std::endl;
     out << "primary_points_visibility_threshold: " << primary_points_visibility_threshold << std::endl;
+    out << "num_points_per_camera: " << numPointsPerCamera << std::endl;
 
     out << "fake_points_multiplier: " << fake_points_multiplier << std::endl;
 

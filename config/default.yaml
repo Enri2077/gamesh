@@ -6,7 +6,7 @@ gamesh:
   w_2: 2.0
   w_3: 1.0
   w_m: 1.0
-  ray_removal_threshold: 50.0
+  ray_removal_threshold: 100000.0
   prob_or_vote_threshold: 20.0
   max_distance_cam_feature: 40.0
   steiner_grid_step_length: 20.0
@@ -15,8 +15,9 @@ gamesh:
   initial_manifold_update_skip: 2
   save_manifold_every: 1
   primary_points_visibility_threshold: 1
+  num_points_per_camera: 100
   all_sort_of_output: false
-  time_stats_output: false
+  time_stats_output: true
   fake_points_multiplier: 0
   update_points_position: false
   

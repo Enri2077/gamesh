@@ -39,7 +39,7 @@
 
 #define GAMESH_RAYS_TOPIC "gamesh_rays"
 
-int numPointsPerCamera = 200;
+int numPointsPerCamera_ = 1000;
 
 long unsigned int nextPointId_ = 0;
 std::queue<CameraType*> newCameras_;
@@ -72,7 +72,7 @@ void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 	int numPointsAdded = 0;
 //	for (auto pclPoint : pointCloud.points) {
 	for(int i=0; i<pointCloud.points.size(); i++){
-		if( i % (pointCloud.points.size()/numPointsPerCamera) ) continue;
+		if( i % (pointCloud.points.size()/numPointsPerCamera_) ) continue;
 				
 		auto pclPoint = pointCloud.points[i];
 		
@@ -126,7 +126,6 @@ int main(int argc, char **argv) {
 	globalPointCloudPublisher = n.advertise<pcl::PCLPointCloud2>("gamesh_points", 1);
 	globalBridgePointCloudPublisher = n.advertise<sensor_msgs::PointCloud2>("gamesh_bridge_points", 1);
 	
-	ROS_INFO("Gamesh node initialised");
 	
 	if(!n.getParam("gamesh/inverse_conic_enabled", confManif.inverseConicEnabled)
 	|| !n.getParam("gamesh/prob_or_vote_threshold", confManif.probOrVoteThreshold)
@@ -144,6 +143,7 @@ int main(int argc, char **argv) {
 	|| !n.getParam("gamesh/initial_manifold_update_skip", confManif.initial_manifold_update_skip)
 	|| !n.getParam("gamesh/save_manifold_every", confManif.save_manifold_every)
 	|| !n.getParam("gamesh/primary_points_visibility_threshold", confManif.primary_points_visibility_threshold)
+	|| !n.getParam("gamesh/num_points_per_camera", confManif.numPointsPerCamera)
 	|| !n.getParam("gamesh/fake_points_multiplier", confManif.fake_points_multiplier)
 	|| !n.getParam("gamesh/all_sort_of_output", confManif.all_sort_of_output)	
 	|| !n.getParam("gamesh/time_stats_output", confManif.time_stats_output)
@@ -154,6 +154,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
+	numPointsPerCamera_ = confManif.numPointsPerCamera;
 	std::cout << "max_iterations set to: " << maxIterations_ << std::endl;
 	std::cout << confManif.toString() << std::endl;
 	
@@ -166,11 +167,13 @@ int main(int argc, char **argv) {
 	
 	m.setExpectedTotalIterationsNumber((maxIterations_) ? maxIterations_ + 1 : -1);
 	
+	ROS_INFO("Gamesh node initialised");
+	
 	// Main loop
 	while(ros::ok()) {
 		if(newCameras_.empty()){
 			std::cout << "no new cameras to add" << std::endl;
-			ros::Duration(0.01).sleep();
+			ros::Duration(0.1).sleep();
 		}else{
 			log.startEvent();
 			
