@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "ros/ros.h"
+
 class OutputCreator {
 public:
 
@@ -37,6 +39,9 @@ public:
 	void setTh(float th) {
 		th_ = th;
 	}
+
+	void publishROSMesh(ros::Publisher& meshPublisher);
+
 	void writeOFF(const std::string filename, int lastCam = -1);
 	void writeOFF(const std::string filename, std::vector<int> cams);
 	void writeFreespaceOFF(const std::string filename);
@@ -61,6 +66,7 @@ private:
 	void facetToTriangle(const Delaunay3::Facet & f, std::vector<Delaunay3::Vertex_handle> & vecTri);
 	Delaunay3& dt_;
 	float th_;
+
 };
 
 #endif /* OUTPUTCREATOR_H_ */

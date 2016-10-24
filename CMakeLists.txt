@@ -9,7 +9,7 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-	roscpp std_msgs geometry_msgs sensor_msgs nav_msgs tf
+	roscpp std_msgs geometry_msgs shape_msgs sensor_msgs nav_msgs tf
 	pcl_conversions pcl_msgs
 	message_generation
 )
@@ -164,6 +164,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fpermissive")
 file(GLOB_RECURSE meshRec_SOURCE 
 	src/*.cpp
 	test/*.cpp
+)
 
 #	src/cam_parsers/*.cpp
 #	src/Delaunay3DCellInfo.cpp
@@ -175,7 +176,7 @@ file(GLOB_RECURSE meshRec_SOURCE
 #	test/ReconstructFromSLAMData.cpp
 #	test/CameraPointsCollection.cpp
 #	test/Main.cpp
-)
+#)
 
 add_executable(gamesh_node ${meshRec_SOURCE} )
 target_link_libraries(

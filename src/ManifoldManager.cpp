@@ -7,6 +7,7 @@
 
 #include <ManifoldManager.h>
 #include <OutputCreator.h>
+#include <OutputManager.h>
 #include <utilities.hpp>
 #include <sstream>
 #include <iostream>
@@ -15,17 +16,15 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-ManifoldManager::ManifoldManager(Delaunay3& dt, bool inverseConic, float probabTh, ManifoldReconstructionConfig conf) :
-		dt_(dt) {
+ManifoldManager::ManifoldManager(Delaunay3& dt, ManifoldReconstructionConfig& conf) :
+		dt_(dt), conf_(conf) {
 
-	conf_ = conf;
-	inverseConic_ = inverseConic;
-	probabTh_ = probabTh;
 	outputM_ = new OutputCreator(dt_);
+	out_ = new OutputManager(boundaryCellsSpatialMap_, conf);
+
 }
 
 ManifoldManager::~ManifoldManager() {
-//	boundaryCells_.clear();
 	boundaryCellsSpatialMap_.clear();
 }
 
@@ -120,10 +119,14 @@ void ManifoldManager::shrinkManifold3(const std::set<PointD3>& points, const flo
 
 			if (!currentTet->info().iskeptManifold() || !currentTet->info().isBoundary()) continue;
 
-			if (!currentTet->info().iskeptManifold()) cerr << "ManifoldManager::shrinkManifold3:\t wrong shrink order (trying to shrink non manifold cell)\t iteration: " << countIterations << endl;
-			if (!currentTet->info().isBoundary()) cerr << "ManifoldManager::shrinkManifold3:\t wrong shrink order (non boundary cell in queue)\t iteration: " << countIterations << endl;
-			if (currentTet->info().iskeptManifold() && !currentTet->info().isBoundary()) cerr << "ManifoldManager::shrinkManifold3:\t inconsistent boundary and manifold (m and !b)\t iteration: " << countIterations << endl;
-			if (!currentTet->info().iskeptManifold() && currentTet->info().isBoundary()) cerr << "ManifoldManager::shrinkManifold3:\t inconsistent boundary and manifold (!m and b)\t iteration: " << countIterations << endl;
+			if (!currentTet->info().iskeptManifold())
+				cerr << "ManifoldManager::shrinkManifold3:\t wrong shrink order (trying to shrink non manifold cell)\t iteration: " << countIterations << endl;
+			if (!currentTet->info().isBoundary())
+				cerr << "ManifoldManager::shrinkManifold3:\t wrong shrink order (non boundary cell in queue)\t iteration: " << countIterations << endl;
+			if (currentTet->info().iskeptManifold() && !currentTet->info().isBoundary())
+				cerr << "ManifoldManager::shrinkManifold3:\t inconsistent boundary and manifold (m and !b)\t iteration: " << countIterations << endl;
+			if (!currentTet->info().iskeptManifold() && currentTet->info().isBoundary())
+				cerr << "ManifoldManager::shrinkManifold3:\t inconsistent boundary and manifold (!m and b)\t iteration: " << countIterations << endl;
 
 			chronoTesting.start();
 			if (singleTetTest2(currentTet)) {
@@ -170,7 +173,7 @@ void ManifoldManager::shrinkManifold3(const std::set<PointD3>& points, const flo
 		}
 	}
 
-	if(conf_.time_stats_output){
+	if (conf_.time_stats_output) {
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t lastEnclosingPointCache:\t\t" << chronoLastEnclosingPointCache.getMicroseconds() << " µs" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t queue inserting:\t\t\t" << chronoQueueInserting.getSeconds() << " s" << endl;
@@ -179,7 +182,7 @@ void ManifoldManager::shrinkManifold3(const std::set<PointD3>& points, const flo
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t enclosing:\t\t\t\t" << chronoEnclosing.getSeconds() << " s\t / \t" << countTotal << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t test:\t\t\t\t\t" << chronoTesting.getSeconds() << " s\t / \t" << countInEnclosingVolume << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkManifold3:\t\t\t\t shrink:\t\t\t\t" << chronoShrinking.getSeconds() << " s\t / \t" << countShrinked << endl;
-	//	cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
+		//	cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
 		cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countSuccessfulEnclosingVersionCache:\t\t\t" << countSuccessfulEnclosingVersionCache << "\t / \t" << countTotal << endl;
 		cout << "ManifoldManager::shrinkManifold3:\t\t\t\t countSuccessfulLastEnclosingPointCache:\t\t" << countSuccessfulLastEnclosingPointCache << "\t / \t" << countTotal - countSuccessfulEnclosingVersionCache << endl;
 		cout << "ManifoldManager::shrinkManifold3:\t\t\t\t number_of_finite_cells:\t\t" << dt_.number_of_finite_cells() << endl;
@@ -222,7 +225,7 @@ void ManifoldManager::shrinkSeveralAtOnce3(const std::set<PointD3>& points, cons
 //	int countBoundaryInitCells = boundaryCells_.size();
 //	int countQueueInitCells = tetsQueue.size();
 
-	//	std::sort(tetsQueue.begin(), tetsQueue.end());
+//	std::sort(tetsQueue.begin(), tetsQueue.end());
 	chronoQueueInit.stop();
 
 	while (!tetsQueue.empty()) {
@@ -289,13 +292,13 @@ void ManifoldManager::shrinkSeveralAtOnce3(const std::set<PointD3>& points, cons
 		}
 	}
 
-	if(conf_.time_stats_output){
+	if (conf_.time_stats_output) {
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t queue popping:\t\t\t\t" << chronoQueuePopping.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t enclosing:\t\t\t\t" << chronoEnclosing.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t addAndCheckManifoldness:\t\t" << chronoAddAndCheckManifoldness.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t isRegular:\t\t\t\t" << functionProfileChronometer_isRegular_.getSeconds() << " s\t / \t" << functionProfileCounter_isRegular_ << endl;
-	//	cout << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
+		//	cout << "ManifoldManager::shrinkSeveralAtOnce3:\t\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
 	}
 }
 
@@ -381,9 +384,12 @@ void ManifoldManager::regionGrowingProcedure3(const std::set<PointD3>& points) {
 
 			if (currentTet->info().iskeptManifold() || currentTet->info().isBoundary()) continue;
 
-			if (currentTet->info().isBoundary()) cerr << "ManifoldManager::regionGrowingProcedure3:\t wrong grow order (boundary cell in queue)\t iteration: " << countIterations << endl;
-			if (currentTet->info().iskeptManifold() && !currentTet->info().isBoundary()) cerr << "ManifoldManager::regionGrowingProcedure3:\t inconsistent boundary and manifold (m and !b)\t iteration: " << countIterations << endl;
-			if (!currentTet->info().iskeptManifold() && currentTet->info().isBoundary()) cerr << "ManifoldManager::regionGrowingProcedure3:\t inconsistent boundary and manifold (!m and b)\t iteration: " << countIterations << endl;
+			if (currentTet->info().isBoundary())
+				cerr << "ManifoldManager::regionGrowingProcedure3:\t wrong grow order (boundary cell in queue)\t iteration: " << countIterations << endl;
+			if (currentTet->info().iskeptManifold() && !currentTet->info().isBoundary())
+				cerr << "ManifoldManager::regionGrowingProcedure3:\t inconsistent boundary and manifold (m and !b)\t iteration: " << countIterations << endl;
+			if (!currentTet->info().iskeptManifold() && currentTet->info().isBoundary())
+				cerr << "ManifoldManager::regionGrowingProcedure3:\t inconsistent boundary and manifold (!m and b)\t iteration: " << countIterations << endl;
 			if (currentTet->info().iskeptManifold()) cerr << "ManifoldManager::regionGrowingProcedure3:\t wrong grow order\t iteration: " << countIterations << endl;
 
 			chronoTesting.start();
@@ -416,7 +422,8 @@ void ManifoldManager::regionGrowingProcedure3(const std::set<PointD3>& points) {
 			} else {
 				chronoTesting.stop();
 
-				if(currentTet->info().iskeptManifold()) cerr << "ManifoldManager::regionGrowingProcedure3: changing manifold state of ungrown cell; iteration " << countIterations << endl;
+				if (currentTet->info().iskeptManifold())
+					cerr << "ManifoldManager::regionGrowingProcedure3: changing manifold state of ungrown cell; iteration " << countIterations << endl;
 
 				currentTet->info().setKeptManifold(false); // TODO useful?
 
@@ -437,7 +444,7 @@ void ManifoldManager::regionGrowingProcedure3(const std::set<PointD3>& points) {
 //	if (tetsQueue.size()) cerr << "ManifoldManager::regionGrowingProcedure3: \t\t exiting while queue not empty" << endl;
 	tetsQueue.clear();
 
-	if(conf_.time_stats_output){
+	if (conf_.time_stats_output) {
 		cout << "ManifoldManager::regionGrowingProcedure3:\t\t\t countIterations:\t\t\t\t" << countIterations << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t queue inserting:\t\t\t" << chronoQueueInserting.getSeconds() << " s" << endl;
@@ -445,7 +452,7 @@ void ManifoldManager::regionGrowingProcedure3(const std::set<PointD3>& points) {
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t inserting:\t\t\t\t" << chronoInserting.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t test:\t\t\t\t\t" << chronoTesting.getSeconds() << " s\t / \t" << countTotal << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::regionGrowingProcedure3:\t\t\t grow:\t\t\t\t\t" << chronoGrowing.getSeconds() << " s\t / \t" << countGrowned << endl;
-	//	cout << "ManifoldManager::regionGrowingProcedure3:\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
+		//	cout << "ManifoldManager::regionGrowingProcedure3:\t\t\t countQueueInitCells:\t\t\t\t\t" << countQueueInitCells << "\t / \t" << countBoundaryInitCells << endl;
 		cout << "ManifoldManager::regionGrowingProcedure3:\t\t\t number_of_finite_cells:\t\t" << dt_.number_of_finite_cells() << endl;
 	}
 }
@@ -507,15 +514,14 @@ void ManifoldManager::growSeveralAtOnce3(const std::set<PointD3>& points) {
 
 		countTotal++;
 
-		if (currentTet->info().isBoundary())  cerr << "ManifoldManager::growSeveralAtOnce3:\t wrong grow order (boundary cell in queue)" << endl;
-
 		if (currentTet->info().iskeptManifold() || currentTet->info().isBoundary()) continue;
 
 		if (currentTet->info().isBoundary()) cerr << "ManifoldManager::growSeveralAtOnce3:\t wrong grow order (boundary cell in queue)" << endl;
-		if (currentTet->info().iskeptManifold() && !currentTet->info().isBoundary()) cerr << "ManifoldManager::growSeveralAtOnce3:\t inconsistent boundary and manifold (m and !b)" << endl;
-		if (!currentTet->info().iskeptManifold() && currentTet->info().isBoundary()) cerr << "ManifoldManager::growSeveralAtOnce3:\t inconsistent boundary and manifold (!m and b)" << endl;
+		if (currentTet->info().iskeptManifold() && !currentTet->info().isBoundary())
+			cerr << "ManifoldManager::growSeveralAtOnce3:\t inconsistent boundary and manifold (m and !b)" << endl;
+		if (!currentTet->info().iskeptManifold() && currentTet->info().isBoundary())
+			cerr << "ManifoldManager::growSeveralAtOnce3:\t inconsistent boundary and manifold (!m and b)" << endl;
 		if (currentTet->info().iskeptManifold()) cerr << "ManifoldManager::growSeveralAtOnce3:\t wrong grow order" << endl;
-
 
 		// TODO before or after aborting the cycle?
 		currentTet->info().setToBeTested(false);
@@ -532,7 +538,7 @@ void ManifoldManager::growSeveralAtOnce3(const std::set<PointD3>& points) {
 
 	chronoRemoveAndCheckManifoldness.stop();
 
-	if(conf_.time_stats_output){
+	if (conf_.time_stats_output) {
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t queue init:\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t remove and check manifoldness:\t\t" << chronoRemoveAndCheckManifoldness.getSeconds() << " s" << endl;
 		cout << std::fixed << std::setprecision(3) << "ManifoldManager::growSeveralAtOnce3:\t\t\t\t isRegular:\t\t\t\t" << functionProfileChronometer_isRegular_.getSeconds() << " s\t / \t" << functionProfileCounter_isRegular_ << endl;
@@ -657,7 +663,6 @@ void ManifoldManager::addTetAndUpdateBoundary2(Delaunay3::Cell_handle& currentTe
 		currentTet->info().setBoundary(false);
 	}
 
-
 //Check if the neigh of the added tetrahedron still belongs to the boundary
 	for (int curNeighId = 0; curNeighId < 4; ++curNeighId) {
 		Delaunay3::Cell_handle currNeigh = currentTet->neighbor(curNeighId);
@@ -751,7 +756,6 @@ bool ManifoldManager::insertInBoundary(Delaunay3::Cell_handle& cellToBeAdded) {
 	// TODO rewrite in a cleaner way
 	if (!cellToBeAdded->info().isBoundary()) {
 		cellToBeAdded->info().setBoundary(true);
-
 
 //		std::vector<Delaunay3::Cell_handle>::iterator it = std::lower_bound(boundaryCells_.begin(), boundaryCells_.end(), cellToBeAdded, sortTetByIntersection());
 //		if (it != boundaryCells_.end()) {
@@ -1040,10 +1044,10 @@ bool ManifoldManager::isRegular(Delaunay3::Vertex_handle &v) {
 
 bool ManifoldManager::isFreespace(Delaunay3::Cell_handle &cell) {
 	bool value;
-	if (!inverseConic_) {
-		value = !cell->info().isKeptByVoteCount(probabTh_);
+	if (!conf_.inverseConicEnabled) {
+		value = !cell->info().isKeptByVoteCount(conf_.freeVoteThreshold);
 	} else {
-		value = !cell->info().isKeptByVoteCountProb(probabTh_);      // && cell->info().getVoteCount()>=1.0;
+		value = !cell->info().isKeptByVoteCountProb(conf_.freeVoteThreshold);
 	}
 	return value;
 }

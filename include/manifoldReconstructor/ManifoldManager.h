@@ -8,6 +8,7 @@
 #include <types_reconstructor.hpp>
 #include <types_config.hpp>
 #include <OutputCreator.h>
+#include <OutputManager.h>
 #include <Logger.h>
 #include <Chronometer.h>
 /**
@@ -18,7 +19,7 @@
  * */
 class ManifoldManager {
 public:
-	ManifoldManager(Delaunay3& dt, bool inverseConic_, float probabTh_, ManifoldReconstructionConfig conf);
+	ManifoldManager(Delaunay3& dt, ManifoldReconstructionConfig& conf);
 	virtual ~ManifoldManager();
 
 	size_t getBoundarySize() {
@@ -49,17 +50,21 @@ public:
 	void growSeveralAtOnce3(const std::set<PointD3>& points);
 
 	const std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> getBoundaryCells() const {
-		std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> boundaryCells_;
+		std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> boundaryCells;
 
 		for (auto i_lbc : boundaryCellsSpatialMap_) {
-			boundaryCells_.insert(i_lbc.second.begin(), i_lbc.second.end());
+			boundaryCells.insert(i_lbc.second.begin(), i_lbc.second.end());
 		}
 
-		return boundaryCells_;
+		return boundaryCells;
 	}
 
 	const std::map<index3, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess>>& getBoundaryCellsSpatialMap() const {
 		return boundaryCellsSpatialMap_;
+	}
+
+	OutputManager* getOutputManager(){
+		return out_;
 	}
 
 	Chronometer chronoInsertInBoundary_, chronoRemoveFromBoundary_;
@@ -99,10 +104,9 @@ private:
 	std::map<index3, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess>> boundaryCellsSpatialMap_;
 
 	Delaunay3& dt_;
-	OutputCreator *outputM_;
-	bool inverseConic_;
-	float probabTh_;
-	ManifoldReconstructionConfig conf_;
+	OutputCreator* outputM_;
+	OutputManager* out_ = NULL;
+	ManifoldReconstructionConfig& conf_;
 
 	std::ofstream fileOut_;
 

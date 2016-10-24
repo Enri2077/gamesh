@@ -10,12 +10,33 @@
 #include <fstream>
 #include <iostream>
 
-OutputCreator::OutputCreator(Delaunay3 &dt) :
+#include <geometry_msgs/PoseStamped.h>
+#include <shape_msgs/Mesh.h>
+
+OutputCreator::OutputCreator(Delaunay3& dt) :
 		dt_(dt) {
 	th_ = 1.0;
 }
 
 OutputCreator::~OutputCreator() {
+}
+
+void OutputCreator::publishROSMesh(ros::Publisher& meshPublisher){
+	shape_msgs::Mesh m;
+	geometry_msgs::Point p0, p1, p2;
+
+	shape_msgs::MeshTriangle triangle0;
+
+	p0.x = 0; p0.y = 0; p0.z = 0; m.vertices.push_back(p0);
+	p1.x = 0; p1.y = 1; p1.z = 0; m.vertices.push_back(p1);
+	p2.x = 0; p2.y = 0; p2.z = 1; m.vertices.push_back(p2);
+
+	triangle0.vertex_indices[0] = 0;
+	triangle0.vertex_indices[1] = 1;
+	triangle0.vertex_indices[2] = 2;
+	
+	m.triangles.push_back(triangle0);
+	meshPublisher.publish(m);
 }
 
 void OutputCreator::tetrahedraToTriangles(std::vector<PointD3>& points, std::vector<PointD3>& tris, int lastCam) {

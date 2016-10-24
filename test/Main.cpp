@@ -16,6 +16,7 @@
 #include <CameraPointsCollection.h>
 #include <Logger.h>
 #include <ReconstructFromSLAMData.h>
+#include <OutputManager.h>
 #include <types_config.hpp>
 #include <types_reconstructor.hpp>
 #include <cstdlib>
@@ -23,11 +24,12 @@
 #include <queue>
 #include <utility>
 
-#include "ros/ros.h"
+#include <ros/ros.h>
 
 #include <gamesh_bridge/GameshRays.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <shape_msgs/Mesh.h>
 
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
@@ -45,7 +47,7 @@ long unsigned int nextPointId_ = 0;
 std::queue<CameraType*> newCameras_;
 CameraPointsCollection cameraPoints_;
 
-ros::Publisher globalPointCloudPublisher, globalBridgePointCloudPublisher;
+ros::Publisher globalPointCloudPublisher, globalBridgePointCloudPublisher, globalMeshPublisher;
 
 void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloud;
@@ -122,33 +124,42 @@ int main(int argc, char **argv) {
 	ros::NodeHandle n;
 	ros::Subscriber raysSubscriber = n.subscribe<gamesh_bridge::GameshRays> (GAMESH_RAYS_TOPIC, 1000, raysCallback);
 	
+	ros::Publisher meshPublisher = n.advertise<shape_msgs::Mesh>("gamesh_mesh", 1);
+	
 	/*** TEST PC2 PUBLISHER ***/
 	globalPointCloudPublisher = n.advertise<pcl::PCLPointCloud2>("gamesh_points", 1);
 	globalBridgePointCloudPublisher = n.advertise<sensor_msgs::PointCloud2>("gamesh_bridge_points", 1);
 	
-	
 	if(!n.getParam("gamesh/inverse_conic_enabled", confManif.inverseConicEnabled)
-	|| !n.getParam("gamesh/prob_or_vote_threshold", confManif.probOrVoteThreshold)
-	|| !n.getParam("gamesh/ray_removal_threshold", confManif.rayRemovalThreshold)
-	|| !n.getParam("gamesh/max_distance_cam_feature", confManif.maxDistanceCamFeature)
 	|| !n.getParam("gamesh/enable_suboptimal_policy", confManif.enableSuboptimalPolicy)
 	|| !n.getParam("gamesh/suboptimal_method", confManif.suboptimalMethod)
+	|| !n.getParam("gamesh/update_points_position", confManif.update_points_position)
+	|| !n.getParam("gamesh/enable_ray_mistrust", confManif.enableRayMistrust)
+
 	|| !n.getParam("gamesh/w_1", confManif.w_1)
 	|| !n.getParam("gamesh/w_2", confManif.w_2)
 	|| !n.getParam("gamesh/w_3", confManif.w_3)
 	|| !n.getParam("gamesh/w_m", confManif.w_m)
-	|| !n.getParam("gamesh/steiner_grid_side_length", confManif.steinerGridSideLength)
+
+	|| !n.getParam("gamesh/free_vote_threshold", confManif.freeVoteThreshold)
+	|| !n.getParam("gamesh/ray_removal_threshold", confManif.rayRemovalThreshold)
+	|| !n.getParam("gamesh/vertex_removal_threshold", confManif.vertexRemovalThreshold)
+
+	|| !n.getParam("gamesh/num_points_per_camera", confManif.numPointsPerCamera)
+	|| !n.getParam("gamesh/max_distance_cam_feature", confManif.maxDistanceCamFeature)
 	|| !n.getParam("gamesh/steiner_grid_step_length", confManif.steinerGridStepLength)
+
 	|| !n.getParam("gamesh/manifold_update_every", confManif.manifold_update_every)
 	|| !n.getParam("gamesh/initial_manifold_update_skip", confManif.initial_manifold_update_skip)
 	|| !n.getParam("gamesh/save_manifold_every", confManif.save_manifold_every)
 	|| !n.getParam("gamesh/primary_points_visibility_threshold", confManif.primary_points_visibility_threshold)
-	|| !n.getParam("gamesh/num_points_per_camera", confManif.numPointsPerCamera)
-	|| !n.getParam("gamesh/fake_points_multiplier", confManif.fake_points_multiplier)
+
 	|| !n.getParam("gamesh/all_sort_of_output", confManif.all_sort_of_output)	
 	|| !n.getParam("gamesh/time_stats_output", confManif.time_stats_output)
-	|| !n.getParam("gamesh/update_points_position", confManif.update_points_position)
+
 	|| !n.getParam("gamesh/output_folder", confManif.outputFolder)
+	|| !n.getParam("gamesh/time_stats_folder", confManif.timeStatsFolder)
+	|| !n.getParam("gamesh/count_stats_folder", confManif.countStatsFolder)
 	){
 		std::cout << "Required parameters weren't specified" << std::endl;
 		return 1;
@@ -184,8 +195,11 @@ int main(int argc, char **argv) {
 			
 			m.updateManifold();
 			//if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold(confManif.outputFolder, "current");
-			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold(confManif.outputFolder, std::to_string(m.iterationCount));
-			
+//			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold(confManif.outputFolder, std::to_string(m.iterationCount));
+//			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.publishMesh(meshPublisher);
+			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/current_from_OutputManager.off");
+			 m.getOutputManager()->publishROSMesh(meshPublisher);
+
 			log.endEventAndPrint("main loop\t\t\t\t\t\t", true);
 			std::cout << std::endl;
 			m.insertStatValue(log.getLastDelta());
@@ -199,8 +213,10 @@ int main(int argc, char **argv) {
 	// Do a last manifold update in case op.numCameras() isn't a multiple of confManif.manifold_update_every
 	if (m.iterationCount > confManif.initial_manifold_update_skip) m.updateManifold();
 	
-	m.saveManifold(confManif.outputFolder, "final");
-	
+//	m.saveManifold(confManif.outputFolder, "final");
+	if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/final_from_OutputManager.off");
+	m.getOutputManager()->publishROSMesh(meshPublisher);
+
 	log.endEventAndPrint("main\t\t\t\t\t\t", true);
 	
 	return 0;
