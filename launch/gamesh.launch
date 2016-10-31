@@ -9,11 +9,17 @@
 		
 	</node>
 	
+	<node name="bag_play"
+		pkg="rosbag"
+		type="play"
+		args="--clock -r 1.0 /home/enrico/bags/gamesh/gamesh_rays_by_hand_2016-10-12-16-47-07.bag"
+		required="false">
+	</node>
 	
-		<node pkg="tf"
-			type="static_transform_publisher"
-			name="world_map_bc"
-			args="0 0 0 0 0 0 world map 100"
-		/>
+	<node pkg="tf"
+		type="static_transform_publisher"
+		name="world_map_bc"
+		args="0 0 0 0 0 0 world map 100"
+	/>
 	
 </launch>

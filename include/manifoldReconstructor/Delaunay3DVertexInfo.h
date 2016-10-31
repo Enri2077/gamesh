@@ -41,20 +41,9 @@ public:
 		return listViewingCam_;
 	}
 
-//	int getFirstCam() const {
-//		return firstCam_;
-//	}
-
-//	void setFirstCam(int firstCam) {
-//		firstCam_ = firstCam;
-//	}
-
 private:
-//	int used_;
-//	bool notUsed_;
 	int lastCam_ = -1;
 	int pointId_ = -1;
-//	int firstCam_;
 	std::vector<int> listViewingCam_;
 };
 

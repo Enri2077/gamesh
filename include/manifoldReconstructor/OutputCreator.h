@@ -12,8 +12,6 @@
 #include <string>
 #include <vector>
 
-#include "ros/ros.h"
-
 class OutputCreator {
 public:
 
@@ -39,9 +37,6 @@ public:
 	void setTh(float th) {
 		th_ = th;
 	}
-
-	void publishROSMesh(ros::Publisher& meshPublisher);
-
 	void writeOFF(const std::string filename, int lastCam = -1);
 	void writeOFF(const std::string filename, std::vector<int> cams);
 	void writeFreespaceOFF(const std::string filename);
@@ -54,8 +49,9 @@ public:
 	void writeTetrahedraToOFF(std::string pathPrefix, std::vector<int> ids, std::vector<Delaunay3::Cell_handle> & cells);
 	void writeTetrahedraToOFF(std::string pathPrefix, std::vector<int> ids, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> & cells);
 	void writeTetrahedraAndRayToOFF(std::string pathPrefix, int cameraIndex, int pointIndex, std::vector<Delaunay3::Cell_handle> & cells, Segment constraint);
+	void writeTrianglesToOFF(std::string pathPrefix, std::vector<int> ids, std::vector<Delaunay3::Triangle>& triangles);
 	void writeOneTriangleAndRayToOFF(std::string pathPrefix, std::vector<int> ids, Delaunay3::Triangle & triangle, Segment constraint);
-	void writeRaysToOFF(std::string prefixPath, std::vector<int> ids, std::vector<Segment> &constraints);
+	void writeRaysToOFF(std::string pathPrefix, std::vector<int> ids, std::vector<Segment> &constraints);
 
 private:
 
@@ -66,7 +62,6 @@ private:
 	void facetToTriangle(const Delaunay3::Facet & f, std::vector<Delaunay3::Vertex_handle> & vecTri);
 	Delaunay3& dt_;
 	float th_;
-
 };
 
 #endif /* OUTPUTCREATOR_H_ */

@@ -1,30 +1,40 @@
 gamesh:
-  inverse_conic_enabled: true
-  enable_suboptimal_policy: false
-  suboptimal_method: 0
-  update_points_position: false
+  enable_identified_points: false
+  enable_inverse_conic: true
+  enable_points_position_update: true
   enable_ray_mistrust: false
+  enable_unused_vertex_removing: false
+  enable_mesh_saving: false
+  enable_mesh_publishing: true
+  generate_colored_mesh: true
   
+  free_vote_threshold: 20.0
+  ray_removal_threshold: 2.0
+  unused_vertex_removal_threshold: 100000000.0
+  primary_points_visibility_threshold: 1
+  
+  max_points_per_camera: 100
+  max_distance_camera_points: 40.0
+  steiner_grid_step_length: 1.0
   w_1: 10.0
   w_2: 2.0
   w_3: 1.0
   w_m: 1.0
   
-  free_vote_threshold: 20.0
-  ray_removal_threshold: 100000.0
-  vertex_removal_threshold: 100000000.0
+  triangulation_update_every: 1
+  initial_triangulation_update_skip: 2
+  save_mesh_every: 1
   
-  num_points_per_camera: 15
-  max_distance_cam_feature: 40.0
-  steiner_grid_step_length: 20.0
+  time_stats_output: true
+  debug_output: false
+  publish_received_pointcloud: true
+  publish_used_pointcloud: true
   
-  manifold_update_every: 1
-  initial_manifold_update_skip: 2
-  save_manifold_every: 1
-  primary_points_visibility_threshold: 1
+  input_topic: "gamesh_rays"
+  output_topic: "gamesh_mesh"
   
-  all_sort_of_output: false
-  time_stats_output: false
+  received_pointcloud_topic: "gamesh_bridge_points"
+  used_pointcloud_topic: "gamesh_points"
   
   output_folder: "/home/enrico/gamesh_output/"
   time_stats_folder: "/home/enrico/gamesh_stats/"

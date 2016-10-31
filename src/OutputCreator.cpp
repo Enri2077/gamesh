@@ -10,33 +10,12 @@
 #include <fstream>
 #include <iostream>
 
-#include <geometry_msgs/PoseStamped.h>
-#include <shape_msgs/Mesh.h>
-
-OutputCreator::OutputCreator(Delaunay3& dt) :
+OutputCreator::OutputCreator(Delaunay3 &dt) :
 		dt_(dt) {
 	th_ = 1.0;
 }
 
 OutputCreator::~OutputCreator() {
-}
-
-void OutputCreator::publishROSMesh(ros::Publisher& meshPublisher){
-	shape_msgs::Mesh m;
-	geometry_msgs::Point p0, p1, p2;
-
-	shape_msgs::MeshTriangle triangle0;
-
-	p0.x = 0; p0.y = 0; p0.z = 0; m.vertices.push_back(p0);
-	p1.x = 0; p1.y = 1; p1.z = 0; m.vertices.push_back(p1);
-	p2.x = 0; p2.y = 0; p2.z = 1; m.vertices.push_back(p2);
-
-	triangle0.vertex_indices[0] = 0;
-	triangle0.vertex_indices[1] = 1;
-	triangle0.vertex_indices[2] = 2;
-	
-	m.triangles.push_back(triangle0);
-	meshPublisher.publish(m);
 }
 
 void OutputCreator::tetrahedraToTriangles(std::vector<PointD3>& points, std::vector<PointD3>& tris, int lastCam) {
@@ -728,11 +707,11 @@ void OutputCreator::writeFreespaceOFF(const std::string filename) {
 //	outfile.close();
 //}
 
-void OutputCreator::writeAllVerticesToOFF(std::string prefixPath, std::vector<int> ids) {
+void OutputCreator::writeAllVerticesToOFF(std::string pathPrefix, std::vector<int> ids) {
 
 	std::ofstream outputFile;
 	std::ostringstream outputFileName;
-	outputFileName << prefixPath;
+	outputFileName << pathPrefix;
 	for (auto id : ids)
 		outputFileName << "_" << id;
 	outputFileName << ".off";
@@ -805,7 +784,6 @@ void OutputCreator::writeTetrahedraToOFF(std::string pathPrefix, std::vector<int
 	outputFile.close();
 }
 
-
 void OutputCreator::writeTetrahedraToOFF(std::string pathPrefix, std::vector<int> ids, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> & cells) {
 	// Refuse to create a file with without tetrahedra
 	std::ostringstream outputFileName;
@@ -851,7 +829,7 @@ void OutputCreator::writeTetrahedraToOFF(std::string pathPrefix, std::vector<int
 	outputFile.close();
 }
 
-void OutputCreator::writeTetrahedraAndRayToOFF(std::string prefixPath, int cameraIndex, int pointIndex, std::vector<Delaunay3::Cell_handle> & cells, Segment constraint) {
+void OutputCreator::writeTetrahedraAndRayToOFF(std::string pathPrefix, int cameraIndex, int pointIndex, std::vector<Delaunay3::Cell_handle> & cells, Segment constraint) {
 // Refuse to create a file with without tetrahedra
 	int s = cells.size();
 	if (s == 0) {
@@ -861,7 +839,7 @@ void OutputCreator::writeTetrahedraAndRayToOFF(std::string prefixPath, int camer
 
 	std::ofstream outputFile;
 	std::ostringstream outputFileName;
-	outputFileName << prefixPath << "_" << cameraIndex << "_" << pointIndex << ".off";
+	outputFileName << pathPrefix << "_" << cameraIndex << "_" << pointIndex << ".off";
 	outputFile.open(outputFileName.str().c_str());
 
 	if (!outputFile.is_open()) {
@@ -897,11 +875,55 @@ void OutputCreator::writeTetrahedraAndRayToOFF(std::string prefixPath, int camer
 	outputFile.close();
 }
 
-void OutputCreator::writeOneTriangleAndRayToOFF(std::string prefixPath, std::vector<int> ids, Delaunay3::Triangle & triangle, Segment constraint) {
+void OutputCreator::writeTrianglesToOFF(std::string pathPrefix, std::vector<int> ids, std::vector<Delaunay3::Triangle>& triangles) {
+
+	// Refuse to create a file with without tetrahedra
+	std::ostringstream outputFileName;
+	outputFileName << pathPrefix;
+	for (auto id : ids)
+		outputFileName << "_" << id;
+	outputFileName << ".off";
+
+	int s = triangles.size();
+	if (s == 0) {
+		std::cerr << "OutputCreator::writeTetrahedraAndRayToOFF: no triangles to write in output for: " << outputFileName << std::endl;
+		return;
+	}
+
+	std::ofstream outputFile;
+	outputFile.open(outputFileName.str().c_str());
+
+	if (!outputFile.is_open()) {
+		std::cerr << "OutputCreator::writeTetrahedraToOFF: Unable to open file: " << outputFileName.str() << std::endl;
+		return;
+	}
+
+	std::vector<PointD3> vertices;
+	int triangleNum = triangles.size();
+
+	for (auto t : triangles) {
+		for (int j = 0; j < 3; j++) {
+			vertices.push_back(t.vertex(j));
+		}
+	}
+
+	outputFile << "OFF" << std::endl;
+	outputFile << vertices.size() << " " << triangleNum << " 0" << std::endl;
+
+	for (auto v : vertices)
+		outputFile << static_cast<float>(v.x()) << " " << static_cast<float>(v.y()) << " " << static_cast<float>(v.z()) << std::endl;
+
+	for (int t = 0; t < triangleNum; t++)
+		outputFile << "3 " << 3 * t + 0 << " " << 3 * t + 1 << " " << 3 * t + 2 << std::endl;
+
+	outputFile.close();
+}
+
+void OutputCreator::writeOneTriangleAndRayToOFF(std::string pathPrefix, std::vector<int> ids, Delaunay3::Triangle & triangle, Segment constraint) {
 
 	std::ofstream outputFile;
 	std::ostringstream outputFileName;
-	outputFileName << prefixPath;
+	outputFileName << pathPrefix;
 	for (auto id : ids)
 		outputFileName << "_" << id;
 	outputFileName << ".off";
@@ -936,11 +958,11 @@ void OutputCreator::writeOneTriangleAndRayToOFF(std::string prefixPath, std::vec
 	outputFile.close();
 }
 
-void OutputCreator::writeRaysToOFF(std::string prefixPath, std::vector<int> ids, std::vector<Segment>& constraints) {
+void OutputCreator::writeRaysToOFF(std::string pathPrefix, std::vector<int> ids, std::vector<Segment>& constraints) {
 
 	std::ofstream outputFile;
 	std::ostringstream outputFileName;
-	outputFileName << prefixPath;
+	outputFileName << pathPrefix;
 	for (auto id : ids)
 		outputFileName << "_" << id;
 	outputFileName << ".off";

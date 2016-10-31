@@ -30,59 +30,69 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <shape_msgs/Mesh.h>
+#include <gamesh_bridge/GameshMesh.h>
 
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 
-//#define USE_SFM
-//#define PRODUCE_STATS
-//#define SAVE_POINTS_TO_OFF_AND_EXIT
-
-#define GAMESH_RAYS_TOPIC "gamesh_rays"
-
-int numPointsPerCamera_ = 1000;
-
+int numPointsAdded_ = 0;
+long unsigned int iterationCounter_ = 0;
 long unsigned int nextPointId_ = 0;
 std::queue<CameraType*> newCameras_;
 CameraPointsCollection cameraPoints_;
+ManifoldReconstructionConfig config_;
 
-ros::Publisher globalPointCloudPublisher, globalBridgePointCloudPublisher, globalMeshPublisher;
+ros::Publisher globalPointCloudPublisher, globalBridgePointCloudPublisher;
 
 void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloud;
-	
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr usedPointCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+
 	pcl::fromROSMsg(msg->pointcloud, pointCloud);
-	
+
+	// Check that if enableIdentifiedPoints is true, then the number of identifiers is the same of the number of points
+	//TODO use GameshIdentifiedRays
+//	if(confManif_.enableIdentifiedPoints && msg->point_ids.size() != pointCloud.points.size()) ROS_ERROR("If enable_identified_points is true, then the number of identifiers in gamesh_rays.point_ids should be the same of the number of points in gamesh_rays.pointcloud.points");
+
 	long unsigned int cameraId = msg->camera_id;
-	
-	CameraType* camera = new CameraType();
-	
+
+	CameraType* camera;
+
 	if (cameraPoints_.hasCamera(cameraId)) {
-		std::cout << "raysCallback:\tcamera not updated" << std::endl;
-		return; //TODO manage camera update
+		std::cout << "raysCallback:\tcamera updated" << std::endl;
+		camera = cameraPoints_.getCamera(cameraId);
+	} else {
+		camera = new CameraType();
+		camera->idCam = cameraId;
+		cameraPoints_.addCamera(camera);
 	}
-	
-	camera->idCam = cameraId;
-	cameraPoints_.addCamera(camera);
+
 	camera->center = glm::vec3(msg->camera_pose.position.x, msg->camera_pose.position.y, msg->camera_pose.position.z);
-	
-	/*** TEST PC2 PUBLISHER ***/
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr usedPointCloud (new pcl::PointCloud<pcl::PointXYZRGB>());
-	
-	
-	int numPointsAdded = 0;
-//	for (auto pclPoint : pointCloud.points) {
-	for(int i=0; i<pointCloud.points.size(); i++){
-		if( i % (pointCloud.points.size()/numPointsPerCamera_) ) continue;
-				
-		auto pclPoint = pointCloud.points[i];
-		
-		long unsigned int pointId = nextPointId_++; //TODO manage identified points
-		numPointsAdded++;
-		
+
+	for (int i = 0; i < pointCloud.points.size(); i++) {
+		// If the points in the input pointcloud are more than maxPointsPerCamera, subsample on a grid
+		if (pointCloud.points.size() > config_.maxPointsPerCamera && (i % (pointCloud.points.size() / config_.maxPointsPerCamera)))
+			continue;
+
+		// Slide the grid to avoid taking always the same points from the pointcloud when the camera is not moving
+		int gridSlide = iterationCounter_ * (pointCloud.points.size() / config_.maxPointsPerCamera / 3);
+
+		long unsigned int pclPointId = (i + gridSlide) % pointCloud.points.size();
+
+		auto pclPoint = pointCloud.points[pclPointId];
+
+		long unsigned int pointId;
+		if (config_.enableIdentifiedPoints) {
+//			pointId = msg->point_ids[pclPointId].data; //TODO use GameshIdentifiedRays
+			pointId = nextPointId_++; // TODO remove
+		} else {
+			pointId = nextPointId_++;
+		}
+		numPointsAdded_++;
+
 		PointType* point;
-		
+
 		if (cameraPoints_.hasPoint(pointId)) {
 			point = cameraPoints_.getPoint(pointId);
 			//std::cout << "UPDATE idPoint: "<<point->idPoint << "\tidReconstruction: "<<point->idReconstruction << "\tgetNunmberObservation: "<<point->getNunmberObservation() << std::endl;
@@ -91,134 +101,176 @@ void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 			point->idPoint = pointId;
 			cameraPoints_.addPoint(point);
 		}
-		
+
 		point->position = glm::vec3(pclPoint.x, pclPoint.y, pclPoint.z);
+
+		if (config_.generateColoredMesh) {
+			point->r = pclPoint.r / 255.0;
+			point->g = pclPoint.g / 255.0;
+			point->b = pclPoint.b / 255.0;
+			point->a = pclPoint.a / 255.0;
+		} else {
+			point->r = 0.5;
+			point->g = 0.5;
+			point->b = 0.5;
+			point->a = 1.0;
+		}
+
 		cameraPoints_.addVisibility(camera, point);
-		
-		/*** TEST PC2 PUBLISHER ***/
-		usedPointCloud->points.push_back(pclPoint);
+
+		if (config_.publishUsedPointcloud)
+			usedPointCloud->points.push_back(pclPoint);
 	}
-	
-	/*** TEST PC2 PUBLISHER ***/
-	pcl::PCLPointCloud2::Ptr pc2m (new pcl::PCLPointCloud2());
-	pcl::toPCLPointCloud2(*usedPointCloud, *pc2m);
-	pc2m->header.frame_id = "world";
-	globalPointCloudPublisher.publish(pc2m);
-	
-//	sensor_msgs::PointCloud2::Ptr gbpc2m (new sensor_msgs::PointCloud2());
-	msg->pointcloud.header.frame_id = "world";
-	globalBridgePointCloudPublisher.publish(msg->pointcloud);
-	
+	iterationCounter_++;
+
+	if (config_.publishUsedPointcloud) {
+		pcl::PCLPointCloud2::Ptr pc2m(new pcl::PCLPointCloud2());
+		pcl::toPCLPointCloud2(*usedPointCloud, *pc2m);
+		pc2m->header.frame_id = "world";
+		globalPointCloudPublisher.publish(pc2m);
+	}
+
+	if (config_.publishReceivedPointcloud) {
+		msg->pointcloud.header.frame_id = "world";
+		globalBridgePointCloudPublisher.publish(msg->pointcloud);
+	}
+
 	newCameras_.push(camera);
-	std::cout << "newCameras length: \t" << newCameras_.size() << "\t numPointsAdded: \t" << numPointsAdded << std::endl;
+}
+
+bool getParams(ros::NodeHandle& n) {
+
+	if (!n.getParam("gamesh/enable_identified_points", config_.enableIdentifiedPoints) || !n.getParam(
+			"gamesh/enable_inverse_conic", config_.enableInverseConic) || !n.getParam(
+			"gamesh/enable_points_position_update", config_.enablePointsPositionUpdate) || !n.getParam(
+			"gamesh/enable_ray_mistrust", config_.enableRayMistrust) || !n.getParam(
+			"gamesh/enable_unused_vertex_removing", config_.enableUnusedVertexRemoving) || !n.getParam(
+			"gamesh/enable_mesh_saving", config_.enableMeshSaving) || !n.getParam("gamesh/enable_mesh_publishing",
+			config_.enableMeshPublishing) || !n.getParam("gamesh/generate_colored_mesh", config_.generateColoredMesh)
+
+	|| !n.getParam("gamesh/free_vote_threshold", config_.freeVoteThreshold) || !n.getParam(
+			"gamesh/ray_removal_threshold", config_.rayRemovalThreshold) || !n.getParam(
+			"gamesh/unused_vertex_removal_threshold", config_.unusedVertexRemovalThreshold) || !n.getParam(
+			"gamesh/primary_points_visibility_threshold", config_.primaryPointsVisibilityThreshold)
+
+	|| !n.getParam("gamesh/max_points_per_camera", config_.maxPointsPerCamera) || !n.getParam(
+			"gamesh/max_distance_camera_points", config_.maxDistanceCameraPoints) || !n.getParam(
+			"gamesh/steiner_grid_step_length", config_.steinerGridStepLength) || !n.getParam("gamesh/w_1", config_.w_1) || !n.getParam(
+			"gamesh/w_2", config_.w_2) || !n.getParam("gamesh/w_3", config_.w_3) || !n.getParam("gamesh/w_m",
+			config_.w_m)
+
+	|| !n.getParam("gamesh/save_mesh_every", config_.saveMeshEvery)
+
+	|| !n.getParam("gamesh/time_stats_output", config_.timeStatsOutput) || !n.getParam("gamesh/debug_output",
+			config_.debugOutput) || !n.getParam("gamesh/publish_received_pointcloud", config_.publishReceivedPointcloud) || !n.getParam(
+			"gamesh/publish_used_pointcloud", config_.publishUsedPointcloud)
+
+	|| !n.getParam("gamesh/input_topic", config_.inputTopic) || !n.getParam("gamesh/output_topic", config_.outputTopic)
+
+	|| !n.getParam("gamesh/received_pointcloud_topic", config_.receivedPointcloudTopic) || !n.getParam(
+			"gamesh/used_pointcloud_topic", config_.usedPointcloudTopic)
+
+	|| !n.getParam("gamesh/output_folder", config_.outputFolder) || !n.getParam("gamesh/time_stats_folder",
+			config_.timeStatsFolder) || !n.getParam("gamesh/count_stats_folder", config_.countStatsFolder)) {
+		std::cout << "Required parameters weren't specified" << std::endl;
+		return false;
+	}
+
+	return true;
 }
 
 int main(int argc, char **argv) {
-	std::cout << "pwd: \t" << argv[0] << std::endl;
-	
+
 	utilities::Logger log;
-	ManifoldReconstructionConfig confManif;
 	int maxIterations_ = 0;
-	
+
 	ros::init(argc, argv, "gamesh_node");
 	ros::NodeHandle n;
-	ros::Subscriber raysSubscriber = n.subscribe<gamesh_bridge::GameshRays> (GAMESH_RAYS_TOPIC, 1000, raysCallback);
-	
-	ros::Publisher meshPublisher = n.advertise<shape_msgs::Mesh>("gamesh_mesh", 1);
-	
-	/*** TEST PC2 PUBLISHER ***/
-	globalPointCloudPublisher = n.advertise<pcl::PCLPointCloud2>("gamesh_points", 1);
-	globalBridgePointCloudPublisher = n.advertise<sensor_msgs::PointCloud2>("gamesh_bridge_points", 1);
-	
-	if(!n.getParam("gamesh/inverse_conic_enabled", confManif.inverseConicEnabled)
-	|| !n.getParam("gamesh/enable_suboptimal_policy", confManif.enableSuboptimalPolicy)
-	|| !n.getParam("gamesh/suboptimal_method", confManif.suboptimalMethod)
-	|| !n.getParam("gamesh/update_points_position", confManif.update_points_position)
-	|| !n.getParam("gamesh/enable_ray_mistrust", confManif.enableRayMistrust)
 
-	|| !n.getParam("gamesh/w_1", confManif.w_1)
-	|| !n.getParam("gamesh/w_2", confManif.w_2)
-	|| !n.getParam("gamesh/w_3", confManif.w_3)
-	|| !n.getParam("gamesh/w_m", confManif.w_m)
+	getParams(n);
 
-	|| !n.getParam("gamesh/free_vote_threshold", confManif.freeVoteThreshold)
-	|| !n.getParam("gamesh/ray_removal_threshold", confManif.rayRemovalThreshold)
-	|| !n.getParam("gamesh/vertex_removal_threshold", confManif.vertexRemovalThreshold)
+	ros::Subscriber raysSubscriber = n.subscribe<gamesh_bridge::GameshRays>(config_.inputTopic, 1000, raysCallback);
 
-	|| !n.getParam("gamesh/num_points_per_camera", confManif.numPointsPerCamera)
-	|| !n.getParam("gamesh/max_distance_cam_feature", confManif.maxDistanceCamFeature)
-	|| !n.getParam("gamesh/steiner_grid_step_length", confManif.steinerGridStepLength)
+	ros::Publisher meshPublisher;
+	if (config_.generateColoredMesh)
+		meshPublisher = n.advertise<gamesh_bridge::GameshMesh>(config_.outputTopic, 1);
+	else
+		meshPublisher = n.advertise<shape_msgs::Mesh>(config_.outputTopic, 1);
 
-	|| !n.getParam("gamesh/manifold_update_every", confManif.manifold_update_every)
-	|| !n.getParam("gamesh/initial_manifold_update_skip", confManif.initial_manifold_update_skip)
-	|| !n.getParam("gamesh/save_manifold_every", confManif.save_manifold_every)
-	|| !n.getParam("gamesh/primary_points_visibility_threshold", confManif.primary_points_visibility_threshold)
+	globalPointCloudPublisher = n.advertise<pcl::PCLPointCloud2>(config_.usedPointcloudTopic, 1);
+	globalBridgePointCloudPublisher = n.advertise<sensor_msgs::PointCloud2>(config_.receivedPointcloudTopic, 1);
 
-	|| !n.getParam("gamesh/all_sort_of_output", confManif.all_sort_of_output)	
-	|| !n.getParam("gamesh/time_stats_output", confManif.time_stats_output)
-
-	|| !n.getParam("gamesh/output_folder", confManif.outputFolder)
-	|| !n.getParam("gamesh/time_stats_folder", confManif.timeStatsFolder)
-	|| !n.getParam("gamesh/count_stats_folder", confManif.countStatsFolder)
-	){
-		std::cout << "Required parameters weren't specified" << std::endl;
-		return 1;
-	}
-	
-	numPointsPerCamera_ = confManif.numPointsPerCamera;
+//	numPointsPerCamera_ = confManif_.maxPointsPerCamera;
 	std::cout << "max_iterations set to: " << maxIterations_ << std::endl;
-	std::cout << confManif.toString() << std::endl;
-	
-	if (confManif.manifold_update_every <= 0 || confManif.save_manifold_every <= 0) {
-		std::cerr << std::endl << "constraint: confManif.manifold_update_every > 0, confManif.save_manifold_every > 0" << std::endl;
+	std::cout << config_.toString() << std::endl;
+
+	if (config_.enableMeshSaving && config_.saveMeshEvery <= 0) {
+		std::cerr << std::endl << "constraint: enable_mesh_saving implies save_mesh_every > 0" << std::endl;
 		return 1;
 	}
-	
-	ReconstructFromSLAMData m(confManif);
-	
+
+	ReconstructFromSLAMData m(config_);
+
 	m.setExpectedTotalIterationsNumber((maxIterations_) ? maxIterations_ + 1 : -1);
-	
+
 	ROS_INFO("Gamesh node initialised");
-	
+
 	// Main loop
-	while(ros::ok()) {
-		if(newCameras_.empty()){
-			std::cout << "no new cameras to add" << std::endl;
+	while (ros::ok()) {
+		if (newCameras_.empty()) {
 			ros::Duration(0.1).sleep();
-		}else{
+			ros::spinOnce();
+		} else {
 			log.startEvent();
-			
-			while(!newCameras_.empty()){
+
+			std::cout << "Input cameras buffer size: \t" << newCameras_.size() << "\t num points added: \t" << numPointsAdded_ << std::endl;
+			numPointsAdded_ = 0;
+
+			while (!newCameras_.empty()) {
 				m.addCamera(newCameras_.front());
 				newCameras_.pop();
 			}
-			
-			m.updateManifold();
-			//if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold(confManif.outputFolder, "current");
-//			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.saveManifold(confManif.outputFolder, std::to_string(m.iterationCount));
-//			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.publishMesh(meshPublisher);
-			if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/current_from_OutputManager.off");
-			 m.getOutputManager()->publishROSMesh(meshPublisher);
+
+			m.update();
+
+			if (config_.enableMeshSaving && ros::ok() && m.iterationCount && !(m.iterationCount % config_.saveMeshEvery)) {
+				m.saveMesh(config_.outputFolder, "current");
+				m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/current_from_OutputManager.off");
+			}
+
+			if (config_.enableMeshPublishing) {
+				if (config_.generateColoredMesh)
+					m.getOutputManager()->publishROSColoredMesh(meshPublisher);
+				else
+					m.getOutputManager()->publishROSMesh(meshPublisher);
+			}
 
 			log.endEventAndPrint("main loop\t\t\t\t\t\t", true);
 			std::cout << std::endl;
 			m.insertStatValue(log.getLastDelta());
+
+			ros::spinOnce();
+
+			std::cout << "Input cameras buffer empty. Waiting for new cameras" << std::endl;
+
 		}
-		
-		if (maxIterations_ && m.iterationCount >= maxIterations_) break;
-		
-		ros::spinOnce();
+
+		if (maxIterations_ && m.iterationCount >= maxIterations_)
+			break;
+
 	}
-	
-	// Do a last manifold update in case op.numCameras() isn't a multiple of confManif.manifold_update_every
-	if (m.iterationCount > confManif.initial_manifold_update_skip) m.updateManifold();
-	
-//	m.saveManifold(confManif.outputFolder, "final");
-	if (m.iterationCount && !(m.iterationCount % confManif.save_manifold_every)) m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/final_from_OutputManager.off");
-	m.getOutputManager()->publishROSMesh(meshPublisher);
+
+//	if (config_.enableMeshSaving && m.iterationCount){
+//		m.saveMesh(config_.outputFolder, "final");
+//		m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/final_from_OutputManager.off");
+//	}
+//	if(config_.enableMeshPublishing){
+//		if(config_.generateColoredMesh) m.getOutputManager()->publishROSColoredMesh(meshPublisher);
+//		else m.getOutputManager()->publishROSMesh(meshPublisher);
+//	}
 
 	log.endEventAndPrint("main\t\t\t\t\t\t", true);
-	
+
 	return 0;
 }
 

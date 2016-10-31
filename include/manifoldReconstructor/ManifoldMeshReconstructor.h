@@ -59,11 +59,13 @@ public:
 	 *
 	 **/
 	void addPoint(float x, float y, float z);
+	void addPoint(float x, float y, float z, float r, float g, float b, float a);
 //	int addPointWhere(float x, float y, float z);
 	void addCameraCenter(float x, float y, float z);
 	void addVisibilityPair(int camIdx, int pointIdx);
 //	bool hasVisibilityPair(int camIdx, int pointIdx);
 	void movePoint(int idxPoint, float x, float y, float z);
+	void movePoint(int idxPoint, float x, float y, float z, float r, float g, float b, float a);
 //	PointD3 movePointGetOld(int idxPoint, float x, float y, float z);
 	void moveCamera(int idxCamera, float x, float y, float z);
 
@@ -117,9 +119,9 @@ public:
 private:
 //	void shrinkManifold(const PointD3 &camCenter, int updatedCameraIndex);
 //	void shrinkManifold2(std::set<PointD3> points);
-	void shrinkManifold3(std::set<PointD3> points);
+	void shrinkManifold3(const std::set<index3>& enclosingVolumeMapIndices);
 
-	void growManifold3(std::set<PointD3> points);
+	void growManifold3(const std::set<index3>& enclosingVolumeMapIndices);
 
 	void initSteinerPointGridAndBound();
 	void updateSteinerPointGridAndBound();

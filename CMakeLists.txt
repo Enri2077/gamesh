@@ -9,7 +9,7 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-	roscpp std_msgs geometry_msgs shape_msgs sensor_msgs nav_msgs tf
+	roscpp std_msgs geometry_msgs shape_msgs sensor_msgs nav_msgs shape_msgs tf
 	pcl_conversions pcl_msgs
 	message_generation
 )
@@ -201,6 +201,9 @@ target_link_libraries(
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
 # add_dependencies(gamesh ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+#TODO try this
+add_dependencies(gamesh_node gamesh_generate_message_cpp)
 
 ## Declare a C++ executable
 #add_executable(gamesh_node src/gamesh_node.cpp)

@@ -54,17 +54,8 @@ typedef CGAL::Triangulation_hierarchy_3<Dt> Delaunay3;
 typedef Delaunay3::Point PointD3;
 typedef Delaunay3::Vertex_handle Vertex3D_handle;
 
-typedef std::pair<PointD3, float> DistanceWeight;
+//typedef std::pair<PointD3, float> DistanceWeight;
 
-
-//	1 1 1
-//	1 1 2
-//	1 2 1
-//	1 2 2
-//	2 1 1
-//	2 1 2
-//	2 2 1
-//	2 2 2
 
 struct index3 {
 	int i, j, k;
@@ -112,7 +103,8 @@ struct PointType {
 
 	glm::vec3 position;
 	std::vector<CameraType*> viewingCams;
-	//int numObservations;
+
+	float r = 0, g = 0, b = 0, a = 0;
 
 	int getNunmberObservation() {
 		return viewingCams.size();
@@ -123,22 +115,22 @@ struct PointType {
 	}
 };
 
-struct PointParser {
-	float x;
-	float y;
-	float z;
-
-	int R;
-	int G;
-	int B;
-
-	//position of the feature in the corresponding image;
-	//the center of the image plane is the origin
-	std::vector<float> viewingCamerasX;
-	std::vector<float> viewingCamerasY;
-
-	std::vector<int> viewingCamerasIndices;
-};
+//struct PointParser {
+//	float x;
+//	float y;
+//	float z;
+//
+//	int R;
+//	int G;
+//	int B;
+//
+//	//position of the feature in the corresponding image;
+//	//the center of the image plane is the origin
+//	std::vector<float> viewingCamerasX;
+//	std::vector<float> viewingCamerasY;
+//
+//	std::vector<int> viewingCamerasIndices;
+//};
 
 struct sortTetByIntersection {
 	inline bool operator()(const Delaunay3::Cell_handle& i, const Delaunay3::Cell_handle& j) {
@@ -154,6 +146,8 @@ struct sortTetByIntersectionAndDefaultLess {
 struct PointReconstruction { //TODO export in an actual class
 	int idReconstruction;
 	PointD3 position;
+
+	float r = 0, g = 0, b = 0, a = 0;
 
 	// true when the point has been moved and newPosition is set
 	bool toBeMoved = false;
