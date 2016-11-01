@@ -48,7 +48,7 @@ void OutputManager::publishROSMesh(ros::Publisher& meshPublisher) {
 			for (int faceIndex = 0; faceIndex < 4; faceIndex++) { // For each face in the cell
 
 				// If the face is a boundary face (between the boundary cell and a non manifold cell)
-				if (!c->neighbor(faceIndex)->info().iskeptManifold()) {
+				if (!c->neighbor(faceIndex)->info().getManifoldFlag()) {
 
 					std::array<Delaunay3::Vertex_handle, 3> triangleVertices =
 							faceIndexToVertices(c, faceIndex);
@@ -106,10 +106,12 @@ void OutputManager::publishROSColoredMesh(ros::Publisher& meshPublisher) {
 
 		for (auto c : i_lbc.second) { // For each boundary cell in the container
 
+			if(!c->info().getManifoldFlag()) continue; //TODO This is a problem visible also in the grow procedure. Some boundary cells are not in the manifold set
+
 			for (int faceIndex = 0; faceIndex < 4; faceIndex++) { // For each face in the cell
 
 				// If the face is a boundary face (between the boundary cell and a non manifold cell)
-				if (!c->neighbor(faceIndex)->info().iskeptManifold()) {
+				if (!c->neighbor(faceIndex)->info().getManifoldFlag()) {
 
 					std::array<Delaunay3::Vertex_handle, 3> triangleVertices =
 							faceIndexToVertices(c, faceIndex);
@@ -191,7 +193,7 @@ void OutputManager::writeMeshToOff(const std::string filename) {
 		return;
 	}
 
-	std::cout << "boundaryCellsSpatialMap_.size()\t\t "
+	std::cout << "boundaryCellsSpatialMap size\t\t "
 			<< boundaryCellsSpatialMap_.size() << std::endl;
 
 	std::set<Delaunay3::Cell_handle> boundaryCells;
@@ -214,7 +216,7 @@ void OutputManager::writeMeshToOff(const std::string filename) {
 			for (int faceIndex = 0; faceIndex < 4; faceIndex++) { // For each face in the cell
 
 				// If the face is a boundary face (between the boundary cell and a non manifold cell)
-				if (!c->neighbor(faceIndex)->info().iskeptManifold()) {
+				if (!c->neighbor(faceIndex)->info().getManifoldFlag()) {
 
 					std::array<Delaunay3::Vertex_handle, 3> triangleVertices =
 							faceIndexToVertices(c, faceIndex);

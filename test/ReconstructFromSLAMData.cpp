@@ -56,7 +56,7 @@ void ReconstructFromSLAMData::addCamera(CameraType* newCamera) {
 
 		// Add the new camera to ManifoldMeshReconstructor
 		glm::vec3 center = newCamera->center;
-		manifRec_->addCameraCenter(center.x, center.y, center.z);
+		manifRec_->addCamera(center.x, center.y, center.z);
 
 		// Generate the ManifoldMeshReconstructor's index if the camera doesn't have it already
 		isCameraNew = true;

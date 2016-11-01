@@ -23,6 +23,7 @@
 #include <iostream>
 #include <queue>
 #include <utility>
+#include <omp.h>
 
 #include <ros/ros.h>
 
@@ -72,8 +73,7 @@ void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 
 	for (int i = 0; i < pointCloud.points.size(); i++) {
 		// If the points in the input pointcloud are more than maxPointsPerCamera, subsample on a grid
-		if (pointCloud.points.size() > config_.maxPointsPerCamera && (i % (pointCloud.points.size() / config_.maxPointsPerCamera)))
-			continue;
+		if (pointCloud.points.size() > config_.maxPointsPerCamera && (i % (pointCloud.points.size() / config_.maxPointsPerCamera))) continue;
 
 		// Slide the grid to avoid taking always the same points from the pointcloud when the camera is not moving
 		int gridSlide = iterationCounter_ * (pointCloud.points.size() / config_.maxPointsPerCamera / 3);
@@ -118,8 +118,7 @@ void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 
 		cameraPoints_.addVisibility(camera, point);
 
-		if (config_.publishUsedPointcloud)
-			usedPointCloud->points.push_back(pclPoint);
+		if (config_.publishUsedPointcloud) usedPointCloud->points.push_back(pclPoint);
 	}
 	iterationCounter_++;
 
@@ -149,6 +148,7 @@ bool getParams(ros::NodeHandle& n) {
 			config_.enableMeshPublishing) || !n.getParam("gamesh/generate_colored_mesh", config_.generateColoredMesh)
 
 	|| !n.getParam("gamesh/free_vote_threshold", config_.freeVoteThreshold) || !n.getParam(
+			"gamesh/non_conic_free_vote_threshold", config_.nonConicFreeVoteThreshold) || !n.getParam(
 			"gamesh/ray_removal_threshold", config_.rayRemovalThreshold) || !n.getParam(
 			"gamesh/unused_vertex_removal_threshold", config_.unusedVertexRemovalThreshold) || !n.getParam(
 			"gamesh/primary_points_visibility_threshold", config_.primaryPointsVisibilityThreshold)
@@ -181,6 +181,23 @@ bool getParams(ros::NodeHandle& n) {
 
 int main(int argc, char **argv) {
 
+//	int a, b = 0;
+//#pragma omp parallel private(a) shared(b)
+//	while (a < 50) {
+//
+//		int x = 1;
+//
+//		for (long long int i = 0; i < 100000000ll; i++)
+//			if (x) x = 0;
+//			else x = 1;
+//
+//#pragma omp atomic
+//		b += a;
+//
+//		std::cout << b << "\t thread " << omp_get_thread_num() << " / " << omp_get_num_threads() << " \t" << x << std::endl;
+//		++a;
+//	}
+
 	utilities::Logger log;
 	int maxIterations_ = 0;
 
@@ -192,10 +209,8 @@ int main(int argc, char **argv) {
 	ros::Subscriber raysSubscriber = n.subscribe<gamesh_bridge::GameshRays>(config_.inputTopic, 1000, raysCallback);
 
 	ros::Publisher meshPublisher;
-	if (config_.generateColoredMesh)
-		meshPublisher = n.advertise<gamesh_bridge::GameshMesh>(config_.outputTopic, 1);
-	else
-		meshPublisher = n.advertise<shape_msgs::Mesh>(config_.outputTopic, 1);
+	if (config_.generateColoredMesh) meshPublisher = n.advertise<gamesh_bridge::GameshMesh>(config_.outputTopic, 1);
+	else meshPublisher = n.advertise<shape_msgs::Mesh>(config_.outputTopic, 1);
 
 	globalPointCloudPublisher = n.advertise<pcl::PCLPointCloud2>(config_.usedPointcloudTopic, 1);
 	globalBridgePointCloudPublisher = n.advertise<sensor_msgs::PointCloud2>(config_.receivedPointcloudTopic, 1);
@@ -234,15 +249,13 @@ int main(int argc, char **argv) {
 			m.update();
 
 			if (config_.enableMeshSaving && ros::ok() && m.iterationCount && !(m.iterationCount % config_.saveMeshEvery)) {
-				m.saveMesh(config_.outputFolder, "current");
+//				m.saveMesh(config_.outputFolder, "current");
 				m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/current_from_OutputManager.off");
 			}
 
 			if (config_.enableMeshPublishing) {
-				if (config_.generateColoredMesh)
-					m.getOutputManager()->publishROSColoredMesh(meshPublisher);
-				else
-					m.getOutputManager()->publishROSMesh(meshPublisher);
+				if (config_.generateColoredMesh) m.getOutputManager()->publishROSColoredMesh(meshPublisher);
+				else m.getOutputManager()->publishROSMesh(meshPublisher);
 			}
 
 			log.endEventAndPrint("main loop\t\t\t\t\t\t", true);
@@ -251,12 +264,11 @@ int main(int argc, char **argv) {
 
 			ros::spinOnce();
 
-			std::cout << "Input cameras buffer empty. Waiting for new cameras" << std::endl;
+			if (newCameras_.empty()) std::cout << "Input cameras buffer empty. Waiting for new cameras" << std::endl;
 
 		}
 
-		if (maxIterations_ && m.iterationCount >= maxIterations_)
-			break;
+		if (maxIterations_ && m.iterationCount >= maxIterations_) break;
 
 	}
 

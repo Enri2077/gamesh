@@ -36,13 +36,422 @@ ManifoldMeshReconstructor::ManifoldMeshReconstructor(ManifoldReconstructionConfi
 	sgCurrentMaxX_ = sgCurrentMaxY_ = sgCurrentMaxZ_ = conf_.steinerGridStepLength;
 
 	timeStatsFile_.open("/home/enrico/gamesh_stats/timeStats.csv");
-	timeStatsFile_ << "cameras number, updateSteinerGrid, rayRemoving, shrinkManifold, shrinkSingle, shrinkSeveral, Remove vertices, Remove points, Add new vertices, Move vertices, Move Cameras, rayUntracing, rayTracing, rayRetracing, growManifold, growManifoldSev, growManifold, InsertInBoundary, RemoveFromBoundary, addedPoints, movedPoints, Overall" << endl;
+	timeStatsFile_ << "cameras number, updateSteinerGrid, rayRemoving, shrinkManifold, shrinkSingle, shrinkSeveral, Remove vertices, Remove points, Add new vertices, Move vertices, Move Cameras, rayUntracing, rayTracing, rayRetracing, growManifold, growManifoldSev, growManifold, InsertInBoundary, RemoveFromBoundary, isRegular, singleTest, addedPoints, movedPoints, Overall" << endl;
 }
 
 ManifoldMeshReconstructor::~ManifoldMeshReconstructor() {
 	delete (manifoldManager_);
 	delete (outputM_);
 	timeStatsFile_.close();
+}
+
+void ManifoldMeshReconstructor::updateTriangulation() {
+
+	timeStatsFile_ << endl << cameras_.size() << ", ";
+
+	rt2_ChronoUseless_.reset();
+	rt2_ChronoFirstCell_.reset();
+	rt2_ChronoCellTraversing_.reset();
+	rt2_ChronoNeighboursD1Selection_.reset();
+	rt2_ChronoNeighboursD2Selection_.reset();
+	rt2_ChronoNeighboursD1WeightUpdate_.reset();
+	rt2_ChronoNeighboursD2WeightUpdate_.reset();
+
+	manifoldManager_->chronoInsertInBoundary_.reset();
+	manifoldManager_->chronoRemoveFromBoundary_.reset();
+	manifoldManager_->chronoIsRegularOverall_.reset();
+	manifoldManager_->chronoIsRegularOverall2_.reset();
+	manifoldManager_->chronoSingleTestOverall_.reset();
+
+	rt2_CountNeighboursD1WeightUpdate_ = 0;
+	rt2_CountNeighboursD2WeightUpdate_ = 0;
+
+	rt2_SuccessfulCachedIndices = 0;
+	rt2_TriedCachedIndices = 0;
+
+	Chronometer chronoCheck, chronoEverything;
+	chronoCheck.start();
+	chronoCheck.stop();
+	if (conf_.timeStatsOutput) cout << "ManifoldMeshReconstructor::updateTriangulation: \t\t min chrono time\t\t" << chronoCheck.getNanoseconds() << " ns" << endl;
+
+	int addedPointsStat = 0, movedPointsStat = 0, updatedCamerasStat = updatedCamerasId_.size();
+
+	/*
+	 *  Steiner grid updating
+	 */
+
+	if (dt_.number_of_vertices() == 0) {
+		chronoEverything.reset();
+		chronoEverything.start();
+
+		initSteinerPointGridAndBound();
+		updateSteinerPointGridAndBound();
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "initSteinerGrid\t\t" << chronoEverything.getSeconds() << endl << endl;
+	} else {
+		chronoEverything.reset();
+		chronoEverything.start();
+
+		updateSteinerPointGridAndBound();
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "updateSteinerGrid\t\t" << chronoEverything.getSeconds() << endl << endl;
+	}
+	timeStatsFile_ << chronoEverything.getSeconds() << ", ";
+
+	/*
+	 *  Ray removing
+	 */
+
+	int pointsRemovedCount = -1, verticesRemovedCount = -1, raysRemovedAndInvalidatedCount = 0, raysInvaldatedCount = 0,
+			raysRemovedCount = 0, raysCandidateToBeRemovedCount = raysCandidateToBeRemoved_.size();
+
+	if (raysCandidateToBeRemoved_.size()) {
+
+//		std::vector<Segment> outputRays;
+//		for (auto cIndex_pIndex : raysCandidateToBeRemoved_) {
+//			RayPath* r = getRayPath(cIndex_pIndex.first, cIndex_pIndex.second);
+//			if (r->mistrustVote > conf_.rayRemovalThreshold) outputRays.push_back(Segment(cams_[r->cameraId].position, points_[r->pointId].position));
+//		}
+//		outputM_->writeRaysToOFF("output/erasedRays/", std::vector<int> { iterationCounter_ }, outputRays);
+
+		chronoEverything.reset();
+		chronoEverything.start();
+		for (auto cIndex_pIndex : raysCandidateToBeRemoved_) {
+			RayPath* r = getRayPath(cIndex_pIndex.first, cIndex_pIndex.second);
+
+			if (r->mistrustVote > conf_.rayRemovalThreshold) {
+				raysRemovedCount++;
+				removeRay(r);
+			}
+		}
+		raysCandidateToBeRemoved_.clear();
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "rayRemoving\t\t" << chronoEverything.getSeconds() << endl << endl;
+		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
+	} else {
+		if (conf_.timeStatsOutput) cout << "rayRemoving\t\tSkipped" << endl << endl;
+		timeStatsFile_ << 0.0 << ", ";
+	}
+	cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rays removed:\t\t\t\t " << raysRemovedCount << "\t/\t" << raysCandidateToBeRemovedCount << endl;
+
+	/*
+	 * 	Vertex removing based on min adjacent freeVote
+	 */
+
+	if (conf_.enableUnusedVertexRemoving) {
+		for (auto v = dt_.finite_vertices_begin(); v != dt_.finite_vertices_end(); v++) {
+			std::vector<Delaunay3::Cell_handle> incidentCells;
+			bool canBeRemoved = true;
+			dt_.incident_cells(v, std::back_inserter(incidentCells));
+
+			if (v->info().getPointId() == -1) continue; // the vertex is associated with a Steiner point and should not be removed
+
+			for (auto c : incidentCells)
+				if (!c->info().getManifoldFlag() || c->info().getFreeVote() <= conf_.unusedVertexRemovalThreshold) {
+					canBeRemoved = false;
+					break;
+				}
+
+			if (canBeRemoved) verticesToBeRemoved_.push_back(v);
+		}
+
+		verticesRemovedCount = verticesToBeRemoved_.size();
+	}
+
+	/*
+	 *  Enclosing
+	 */
+
+	// TODO also include the points that will be removed
+	std::set<PointD3> enclosingVolumePoints;
+
+	for (auto pIndex : pointsToBeRemovedId_) {
+		enclosingVolumePoints.insert(points_[pIndex].position);
+	}
+
+	for (auto v : verticesToBeRemoved_) {
+		int pointId = v->info().getPointId(); // TODO type
+		if (pointId >= 0) enclosingVolumePoints.insert(points_[pointId].position);
+	}
+
+	if (conf_.enablePointsPositionUpdate) for (auto pIndex : movedPointsId_) {
+		enclosingVolumePoints.insert(points_[pIndex].newPosition);
+	}
+
+	for (auto cIndex : updatedCamerasId_)
+		for (auto pIndex : cameras_[cIndex].newVisiblePoints)
+			if (points_[pIndex].notTriangulated && utilities::distanceEucl(points_[pIndex].position,
+					cameras_[cIndex].position) < conf_.maxDistanceCameraPoints) enclosingVolumePoints.insert(
+					points_[pIndex].position);
+
+	// TODO use cubed sphere to decrease the number of cells that will be tested
+	int subMapBounds = 2;
+	std::set<index3> enclosingVolumeMapIndices;
+	for (auto p : enclosingVolumePoints) {
+		// The index of the grid's cube is the integer rounded down for each coordinate
+		int i = std::floor(p.x() / conf_.steinerGridStepLength);
+		int j = std::floor(p.y() / conf_.steinerGridStepLength);
+		int k = std::floor(p.z() / conf_.steinerGridStepLength);
+
+		for (int i_ = -subMapBounds; i_ <= subMapBounds; i_++)
+			for (int j_ = -subMapBounds; j_ <= subMapBounds; j_++)
+				for (int k_ = -subMapBounds; k_ <= subMapBounds; k_++)
+					enclosingVolumeMapIndices.insert(index3(i + i_, j + j_, k + k_));
+	}
+
+	// This is used to cache the enclosing information in the cells, incrementing it invalidates the cached values and needs to be done when the points on which the enclosing volume is base are changed
+	currentEnclosingVersion_++;
+
+	manifoldManager_->checkBoundaryIntegrity();
+
+	/*
+	 *  Shrinking
+	 */
+
+	timerShrinkTime_ = 0.0;
+	timerShrinkSeveralTime_ = 0.0;
+	if (enclosingVolumePoints.size()) {
+		chronoEverything.reset();
+		chronoEverything.start();
+
+		shrinkManifold(enclosingVolumeMapIndices);
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "Overall shrink\t\t" << chronoEverything.getSeconds() << endl << endl;
+		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
+	} else {
+		if (conf_.timeStatsOutput) cout << "Overall shrink\t\tSkipped" << endl << endl;
+		timeStatsFile_ << 0.0 << ", ";
+	}
+	timeStatsFile_ << timerShrinkTime_ << ", " << timerShrinkSeveralTime_ << ", ";
+
+	manifoldManager_->checkBoundaryIntegrity();
+
+	/*
+	 *  Vertex removing
+	 */
+
+	if (verticesToBeRemoved_.size()) {
+
+		std::vector<Segment> outputRays;
+		for (auto v : verticesToBeRemoved_) {
+			auto pointId = v->info().getPointId();
+			auto pointPosition = points_[pointId].position;
+
+			for (auto cameraId : points_[pointId].viewingCams)
+				outputRays.push_back(Segment(cameras_[cameraId].position, pointPosition));
+
+		}
+		outputM_->writeRaysToOFF("output/erasedRays/", std::vector<int> { iterationCounter_ }, outputRays);
+
+		chronoEverything.reset();
+		chronoEverything.start();
+
+		for (auto v : verticesToBeRemoved_) {
+			auto pointId = v->info().getPointId();
+
+			for (auto cameraId : points_[pointId].viewingCams)
+				removeRay(getRayPath(cameraId, pointId));
+
+			removeVertex(pointId);
+		}
+		verticesToBeRemoved_.clear();
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "Remove vertices\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
+	} else {
+		if (conf_.timeStatsOutput) cout << "Remove vertices\t\t\tSkipped" << endl << endl;
+		timeStatsFile_ << 0.0 << ", ";
+	}
+	cout << "ManifoldMeshReconstructor::rayTracingFromAllCam:\t\t vertices removed:\t " << verticesRemovedCount << endl;
+
+	/*
+	 *  Points removing
+	 */
+	pointsRemovedCount = pointsToBeRemovedId_.size();
+
+	if (pointsToBeRemovedId_.size()) {
+		chronoEverything.reset();
+		chronoEverything.start();
+
+		for (auto id : pointsToBeRemovedId_) {
+			if (!points_[id].notTriangulated) removeVertex(id);
+		}
+		pointsToBeRemovedId_.clear();
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "Remove points\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
+	} else {
+		if (conf_.timeStatsOutput) cout << "Remove points\t\t\tSkipped" << endl << endl;
+		timeStatsFile_ << 0.0 << ", ";
+	}
+	cout << "ManifoldMeshReconstructor::rayTracingFromAllCam:\t\t points removed:\t " << pointsRemovedCount << endl;
+
+	/*
+	 *  Vertex inserting
+	 */
+
+	if (updatedCamerasId_.size()) {
+		chronoEverything.reset();
+		chronoEverything.start();
+
+		for (auto updatedCameraIndex : updatedCamerasId_) {
+
+			for (auto pIndex : cameras_[updatedCameraIndex].newVisiblePoints) {
+				PointReconstruction& point = points_[pIndex];
+
+				if (point.notTriangulated) {
+
+					if (utilities::distanceEucl(point.position, cameras_[updatedCameraIndex].position) < conf_.maxDistanceCameraPoints) {
+
+						/*	Try to insert the new point in the triangulation.
+						 * 	When successful, a new vertex corresponding to the nwe point is created,
+						 * 	some cells are removed from the triangulation and replaced by some others.
+						 */
+						if (insertVertex(point)) {
+							addedPointsStat++;
+							point.vertexHandle->info().setLastCam(updatedCameraIndex);
+						}
+					}
+
+				} else {
+					raysToBeTraced_.insert(pair<int, int>(updatedCameraIndex, point.idReconstruction));
+					point.vertexHandle->info().setLastCam(updatedCameraIndex);
+					for (auto c : point.viewingCams) {
+						if (c <= updatedCameraIndex) point.vertexHandle->info().addCam(updatedCameraIndex);
+					}
+
+				}
+			}
+
+			cameras_[updatedCameraIndex].newVisiblePoints.clear(); // TODO test
+
+		}
+		updatedCamerasId_.clear();
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "Add new vertices\t\t" << chronoEverything.getSeconds() << endl << endl;
+		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
+	} else {
+		if (conf_.timeStatsOutput) cout << "Add new vertices\t\tSkipped" << endl << endl;
+		timeStatsFile_ << 0.0 << ", ";
+	}
+
+	/*
+	 *  Vertex moving
+	 */
+
+	if (conf_.enablePointsPositionUpdate && movedPointsId_.size()) {
+		chronoEverything.reset();
+		chronoEverything.start();
+
+		for (auto id : movedPointsId_) {
+
+			Segment s = Segment(points_[id].position, points_[id].newPosition);
+
+			bool moved;
+			moved = moveVertex(id);
+
+			if (moved) movedPointsStat++;
+
+			if (conf_.debugOutput) if (moved) movedPointsSegments_.push_back(s);
+
+		}
+		movedPointsId_.clear();
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "Move vertices\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
+	} else {
+		if (conf_.timeStatsOutput) cout << "Move vertices\t\t\tSkipped" << endl << endl;
+		timeStatsFile_ << 0.0 << ", ";
+	}
+
+	if (conf_.debugOutput) outputM_->writeRaysToOFF("output/moved_points/moved_points", std::vector<int> { },
+			movedPointsSegments_);
+
+	/*
+	 *  Camera moving
+	 */
+
+	if (movedCamerasId_.size()) {
+		chronoEverything.reset();
+		chronoEverything.start();
+
+		for (int cameraIndex : movedCamerasId_) {
+			moveCameraConstraints(cameraIndex);
+		}
+		movedCamerasId_.clear();
+
+		chronoEverything.stop();
+		if (conf_.timeStatsOutput) cout << "Move Cameras\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
+	} else {
+		if (conf_.timeStatsOutput) cout << "Move Cameras\t\t\tSkipped" << endl << endl;
+		timeStatsFile_ << 0.0 << ", ";
+	}
+
+	/*
+	 *  Ray untracing
+	 *  Ray tracing
+	 *  Ray retracing
+	 */
+
+	rayTracingFromAllCam();
+
+	manifoldManager_->checkBoundaryIntegrity();
+
+	/*
+	 *  Grow
+	 */
+
+	growManifold(enclosingVolumeMapIndices);
+
+	manifoldManager_->checkBoundaryIntegrity();
+
+	timeStatsFile_ << manifoldManager_->chronoInsertInBoundary_.getSeconds() << ", ";
+	timeStatsFile_ << manifoldManager_->chronoRemoveFromBoundary_.getSeconds() << ", ";
+
+	timeStatsFile_ << manifoldManager_->chronoIsRegularOverall_.getSeconds() + manifoldManager_->chronoIsRegularOverall2_.getSeconds() << ", ";
+	timeStatsFile_ << manifoldManager_->chronoSingleTestOverall_.getSeconds() << ", ";
+
+	timeStatsFile_ << (float) addedPointsStat / 100 / updatedCamerasStat << ", ";
+	timeStatsFile_ << (float) movedPointsStat / 100 / updatedCamerasStat << ", ";
+
+	if (conf_.timeStatsOutput) {
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t updated cameras:\t\t" << updatedCamerasStat << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t added points:\t\t\t" << addedPointsStat << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t moved points:\t\t\t" << movedPointsStat << endl;
+
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t insertInBoundary:\t\t" << manifoldManager_->chronoInsertInBoundary_.getSeconds() << " s" << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t removeFromBoundary:\t\t" << manifoldManager_->chronoRemoveFromBoundary_.getSeconds() << " s" << endl;
+
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t isRegularTest/1:\t\t\t" << manifoldManager_->chronoIsRegularOverall_.getSeconds() << " s" << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t isRegularTest/2:\t\t\t" << manifoldManager_->chronoIsRegularOverall2_.getSeconds() << " s" << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t singleTest:\t\t\t" << manifoldManager_->chronoSingleTestOverall_.getSeconds() << " s" << endl;
+
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t useless:\t\t\t" << rt2_ChronoUseless_.getSeconds() << " s" << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t first cell:\t\t\t" << rt2_ChronoFirstCell_.getSeconds() << " s" << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t cell traversing:\t\t" << rt2_ChronoCellTraversing_.getSeconds() << " s" << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t index cache hit ratio:\t\t" << (double) rt2_SuccessfulCachedIndices / (double) rt2_TriedCachedIndices << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t neighbours weight update:\t" << rt2_ChronoNeighboursD1WeightUpdate_.getSeconds() << " s\t / \t" << rt2_CountNeighboursD1WeightUpdate_ << endl;
+		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t neighbours int insert/remove:\t" << rt2_ChronoNeighboursD2WeightUpdate_.getSeconds() << " s\t / \t" << rt2_CountNeighboursD2WeightUpdate_ << endl;
+		cout << endl;
+	}
+
+	iterationCounter_++;
+}
+
+void ManifoldMeshReconstructor::addPoint(float x, float y, float z) {
+	PointReconstruction t;
+	t.idReconstruction = points_.size();
+	t.position = PointD3(x, y, z);
+	points_.push_back(t);
 }
 
 void ManifoldMeshReconstructor::addPoint(float x, float y, float z, float r, float g, float b, float a) {
@@ -57,67 +466,56 @@ void ManifoldMeshReconstructor::addPoint(float x, float y, float z, float r, flo
 	points_.push_back(t);
 }
 
-void ManifoldMeshReconstructor::addPoint(float x, float y, float z) {
-	PointReconstruction t;
-	t.idReconstruction = points_.size();
-	t.position = PointD3(x, y, z);
-	points_.push_back(t);
-}
-
-void ManifoldMeshReconstructor::movePoint(int idxPoint, float x, float y, float z, float r, float g, float b, float a) {
-
-	points_[idxPoint].newPosition = PointD3(x, y, z);
-	points_[idxPoint].toBeMoved = true;
-	pointsMovedIdx_.push_back(idxPoint);
-
-	points_[idxPoint].r = r;
-	points_[idxPoint].g = g;
-	points_[idxPoint].b = b;
-	points_[idxPoint].a = a;
-}
-
-void ManifoldMeshReconstructor::movePoint(int idxPoint, float x, float y, float z) {
-	points_[idxPoint].newPosition = PointD3(x, y, z);
-	points_[idxPoint].toBeMoved = true;
-	pointsMovedIdx_.push_back(idxPoint);
+void ManifoldMeshReconstructor::movePoint(int id, float x, float y, float z) {
+	points_[id].newPosition = PointD3(x, y, z);
+	points_[id].toBeMoved = true;
+	movedPointsId_.push_back(id);
 
 	//TODO check various conditions
 //	updateSteinerGridTargetBounds(x, y, z);
 }
 
-void ManifoldMeshReconstructor::moveCamera(int idxCamera, float x, float y, float z) {
-	cams_[idxCamera].newPosition = PointD3(x, y, z);
-	cams_[idxCamera].toBeMoved = true;
-	//camsPositions_[idxCamera] = cams_[idxCamera].newPosition; // TODO
+void ManifoldMeshReconstructor::movePoint(int id, float x, float y, float z, float r, float g, float b, float a) {
 
-	movedCamerasIdx_.push_back(idxCamera);
-	updatedCamerasIdx_.insert(idxCamera);
+	points_[id].newPosition = PointD3(x, y, z);
+	points_[id].toBeMoved = true;
+	movedPointsId_.push_back(id);
 
-	//TODO check various conditions
-	updateSteinerGridTargetBounds(x, y, z);
+	points_[id].r = r;
+	points_[id].g = g;
+	points_[id].b = b;
+	points_[id].a = a;
 }
 
-void ManifoldMeshReconstructor::addCameraCenter(float x, float y, float z) {
+void ManifoldMeshReconstructor::addCamera(float x, float y, float z) {
 	CamReconstruction t;
-	t.idReconstruction = cams_.size();
+	t.idReconstruction = cameras_.size();
 	t.position = PointD3(x, y, z);
 	glm::vec3 pos = glm::vec3(x, y, z);
 
-	cams_.push_back(t);
-	camsPositions_.push_back(pos);
+	cameras_.push_back(t);
 
-	updatedCamerasIdx_.insert(t.idReconstruction);
+	updatedCamerasId_.insert(t.idReconstruction);
 
 }
 
-void ManifoldMeshReconstructor::addVisibilityPair(int camIdx, int pointIdx) {
-	CamReconstruction& c = cams_[camIdx];
-	PointReconstruction& p = points_[pointIdx];
+void ManifoldMeshReconstructor::moveCamera(int id, float x, float y, float z) {
+	cameras_[id].newPosition = PointD3(x, y, z);
+	cameras_[id].toBeMoved = true;
 
-	c.visiblePoints.push_back(pointIdx);
-	c.newVisiblePoints.push_back(pointIdx);
-	p.viewingCams.push_back(camIdx);
-//	addRay(camIdx, pointIdx);
+	movedCamerasId_.push_back(id);
+	updatedCamerasId_.insert(id);
+
+	updateSteinerGridTargetBounds(x, y, z);
+}
+
+void ManifoldMeshReconstructor::addVisibilityPair(int cameraId, int pointId) {
+	CamReconstruction& c = cameras_[cameraId];
+	PointReconstruction& p = points_[pointId];
+
+	c.visiblePoints.push_back(pointId);
+	c.newVisiblePoints.push_back(pointId);
+	p.viewingCams.push_back(cameraId);
 
 	if (utilities::distanceEucl(c.position, p.position) < conf_.maxDistanceCameraPoints) {
 		updateSteinerGridTargetBounds(c.position.x(), c.position.y(), c.position.z());
@@ -126,21 +524,31 @@ void ManifoldMeshReconstructor::addVisibilityPair(int camIdx, int pointIdx) {
 }
 
 void ManifoldMeshReconstructor::removeVisibilityPair(RayPath* r) {
-	std::vector<int>& cvp = cams_[r->cameraId].visiblePoints;
+	std::vector<int>& cvp = cameras_[r->cameraId].visiblePoints;
 	cvp.erase(std::remove(cvp.begin(), cvp.end(), r->pointId), cvp.end());
 
-	std::vector<int>& cnvp = cams_[r->cameraId].newVisiblePoints;
+	std::vector<int>& cnvp = cameras_[r->cameraId].newVisiblePoints;
 	cnvp.erase(std::remove(cnvp.begin(), cnvp.end(), r->pointId), cnvp.end());
 
 	std::vector<int>& pvc = points_[r->pointId].viewingCams;
 	pvc.erase(std::remove(pvc.begin(), pvc.end(), r->cameraId), pvc.end());
 
-	if (cvp.size() == 0)
-		cout << "Orphan camera " << r->cameraId << endl; //TODO remove
+	if (cvp.size() == 0) cout << "Orphan camera " << r->cameraId << endl; //TODO remove
 	if (pvc.size() == 0) {
-//		cout << "Orphan point  " << r->pointId << endl;
-		pointsToBeRemovedIdx_.push_back(r->pointId);
+		pointsToBeRemovedId_.push_back(r->pointId);
 	}
+}
+
+void ManifoldMeshReconstructor::removeRay(RayPath* r) {
+
+	// Untrace the ray
+	rayUntracing(r);
+
+	// Remove the visibility pair
+	removeVisibilityPair(r);
+
+	// Remove it from the paths
+	eraseRayPath(r);
 }
 
 RayPath* ManifoldMeshReconstructor::addRayPath(int cameraId, int pointId) {
@@ -181,443 +589,6 @@ std::set<RayPath*> ManifoldMeshReconstructor::getRayPathsFromPoint(int pointId) 
 	return pointsRayPaths_.at(pointId);
 }
 
-void ManifoldMeshReconstructor::updateTriangulation() {
-
-	timeStatsFile_ << endl << cams_.size() << ", ";
-
-	rt2_ChronoUseless_.reset();
-	rt2_ChronoFirstCell_.reset();
-	rt2_ChronoCellTraversing_.reset();
-	rt2_ChronoNeighboursD1Selection_.reset();
-	rt2_ChronoNeighboursD2Selection_.reset();
-	rt2_ChronoNeighboursD1WeightUpdate_.reset();
-	rt2_ChronoNeighboursD2WeightUpdate_.reset();
-
-	manifoldManager_->chronoInsertInBoundary_.reset();
-	manifoldManager_->chronoRemoveFromBoundary_.reset();
-
-	rt2_CountNeighboursD1WeightUpdate_ = 0;
-	rt2_CountNeighboursD2WeightUpdate_ = 0;
-
-	rt2_SuccessfulCachedIndices = 0;
-	rt2_TriedCachedIndices = 0;
-
-	Chronometer chronoCheck, chronoEverything;
-	chronoCheck.start();
-	chronoCheck.stop();
-	if (conf_.timeStatsOutput)
-		cout << "ManifoldMeshReconstructor::updateTriangulation: \t\t min chrono time\t\t" << chronoCheck.getNanoseconds() << " ns" << endl;
-
-	int addedPointsStat = 0, movedPointsStat = 0, updatedCamerasStat = updatedCamerasIdx_.size();
-
-	/*
-	 *  Steiner grid updating
-	 */
-
-	if (dt_.number_of_vertices() == 0) {
-		chronoEverything.reset();
-		chronoEverything.start();
-
-		initSteinerPointGridAndBound();
-		updateSteinerPointGridAndBound();
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "├ initSteinerGrid\t\t" << chronoEverything.getSeconds() << endl;
-	} else {
-		chronoEverything.reset();
-		chronoEverything.start();
-
-		updateSteinerPointGridAndBound();
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "├ updateSteinerGrid\t\t" << chronoEverything.getSeconds() << endl;
-	}
-	timeStatsFile_ << chronoEverything.getSeconds() << ", ";
-
-	/*
-	 *  Ray removing
-	 */
-
-	int pointsRemovedCount = -1, verticesRemovedCount = -1, raysRemovedAndInvalidatedCount = 0, raysInvaldatedCount = 0,
-			raysRemovedCount = 0, raysCandidateToBeRemovedCount = raysCandidateToBeRemoved_.size();
-
-	if (raysCandidateToBeRemoved_.size()) {
-
-//		std::vector<Segment> outputRays;
-//		for (auto cIndex_pIndex : raysCandidateToBeRemoved_) {
-//			RayPath* r = getRayPath(cIndex_pIndex.first, cIndex_pIndex.second);
-//			if (r->mistrustVote > conf_.rayRemovalThreshold) outputRays.push_back(Segment(cams_[r->cameraId].position, points_[r->pointId].position));
-//		}
-//		outputM_->writeRaysToOFF("output/erasedRays/", std::vector<int> { iterationCounter_ }, outputRays);
-
-		chronoEverything.reset();
-		chronoEverything.start();
-		for (auto cIndex_pIndex : raysCandidateToBeRemoved_) {
-			RayPath* r = getRayPath(cIndex_pIndex.first, cIndex_pIndex.second);
-
-			if (r->mistrustVote > conf_.rayRemovalThreshold) {
-				raysRemovedCount++;
-				removeRay(r);
-			}
-		}
-		raysCandidateToBeRemoved_.clear();
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "│ ├ rayRemoving\t\t" << chronoEverything.getSeconds() << endl;
-		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
-	} else {
-		if (conf_.timeStatsOutput)
-			cout << "│ ├ rayRemoving\t\tSkipped" << endl;
-		timeStatsFile_ << 0.0 << ", ";
-	}
-	cout << "ManifoldMeshReconstructor::rayTracingFromAllCam:\t rays removed:\t " << raysRemovedCount << "\t/\t" << raysCandidateToBeRemovedCount << endl;
-
-	/*
-	 * 	Vertex removing based on min adjacent freeVote
-	 */
-
-	if (conf_.enableUnusedVertexRemoving) {
-		for (auto v = dt_.finite_vertices_begin(); v != dt_.finite_vertices_end(); v++) {
-			std::vector<Delaunay3::Cell_handle> incidentCells;
-			bool canBeRemoved = true;
-			dt_.incident_cells(v, std::back_inserter(incidentCells));
-
-			if (v->info().getPointId() == -1)
-				continue; // the vertex is associated with a Steiner point and should not be removed
-
-			for (auto c : incidentCells)
-				if (!c->info().iskeptManifold() || c->info().getVoteCountProb() <= conf_.unusedVertexRemovalThreshold) {
-					canBeRemoved = false;
-					break;
-				}
-
-			if (canBeRemoved)
-				verticesToBeRemovedIdx_.push_back(v);
-		}
-
-		verticesRemovedCount = verticesToBeRemovedIdx_.size();
-	}
-
-	/*
-	 *  Enclosing
-	 */
-
-	// TODO also include the points that will be removed
-	std::set<PointD3> enclosingVolumePoints;
-
-	for (auto pIndex : pointsToBeRemovedIdx_) {
-		enclosingVolumePoints.insert(points_[pIndex].position);
-	}
-
-	for (auto v : verticesToBeRemovedIdx_) {
-		int pointId = v->info().getPointId(); // TODO type
-		if (pointId >= 0)
-			enclosingVolumePoints.insert(points_[pointId].position);
-	}
-
-	if (conf_.enablePointsPositionUpdate)
-		for (auto pIndex : pointsMovedIdx_) {
-			//		shrinkPoints.insert(points_[pIndex].position);
-			enclosingVolumePoints.insert(points_[pIndex].newPosition);
-		}
-
-	for (auto cIndex : updatedCamerasIdx_)
-		for (auto pIndex : cams_[cIndex].newVisiblePoints)
-			if (points_[pIndex].notTriangulated && utilities::distanceEucl(points_[pIndex].position,
-					cams_[cIndex].position) < conf_.maxDistanceCameraPoints)
-				enclosingVolumePoints.insert(points_[pIndex].position);
-
-	 // TODO use cubed sphere to decrease the number of cells that will be growned and shrinked
-	int subMapBounds = 2;
-	std::set<index3> enclosingVolumeMapIndices;
-	for (auto p : enclosingVolumePoints) {
-		// The index of the grid's cube is the integer rounded down for each coordinate
-		int i = std::floor(p.x() / conf_.steinerGridStepLength);
-		int j = std::floor(p.y() / conf_.steinerGridStepLength);
-		int k = std::floor(p.z() / conf_.steinerGridStepLength);
-
-		for (int i_ = -subMapBounds; i_ <= subMapBounds; i_++)
-			for (int j_ = -subMapBounds; j_ <= subMapBounds; j_++)
-				for (int k_ = -subMapBounds; k_ <= subMapBounds; k_++)
-					enclosingVolumeMapIndices.insert(index3(i + i_, j + j_, k + k_));
-	}
-
-	// This is used to cache the enclosing information in the cells, incrementing it invalidates the cached values and needs to be done when the points on which the enclosing volume is base are changed
-	currentEnclosingVersion_++;
-
-	// TODO: remove
-//	int countRepeatedShrinkPoints = 0;
-//	if(lastShrinkPoints_.size()){
-//		for( auto p : lastShrinkPoints_) if(shrinkPoints.count(p)) countRepeatedShrinkPoints++;
-//		cout << "countRepeatedShrinkPoints:\t" << countRepeatedShrinkPoints << endl;
-//	}
-//	lastShrinkPoints_.clear();
-//	lastShrinkPoints_.insert(shrinkPoints.begin(), shrinkPoints.end());
-
-	/*
-	 *  Shrinking
-	 */
-
-	timerShrinkTime_ = 0.0;
-	timerShrinkSeveralTime_ = 0.0;
-	if (enclosingVolumePoints.size()) {
-		chronoEverything.reset();
-		chronoEverything.start();
-
-		shrinkManifold3(enclosingVolumeMapIndices);
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "├ shrinkManifold\t\t" << chronoEverything.getSeconds() << endl;
-		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
-	} else {
-		if (conf_.timeStatsOutput)
-			cout << "├ shrinkManifold\t\tSkipped" << endl;
-		timeStatsFile_ << 0.0 << ", ";
-	}
-	timeStatsFile_ << timerShrinkTime_ << ", " << timerShrinkSeveralTime_ << ", ";
-
-	/*
-	 *  Vertex removing
-	 */
-
-	if (verticesToBeRemovedIdx_.size()) {
-
-		std::vector<Segment> outputRays;
-		for (auto v : verticesToBeRemovedIdx_) {
-			auto pointId = v->info().getPointId();
-			auto pointPosition = points_[pointId].position;
-
-			for (auto cameraId : points_[pointId].viewingCams)
-				outputRays.push_back(Segment(cams_[cameraId].position, pointPosition));
-
-		}
-		outputM_->writeRaysToOFF("output/erasedRays/", std::vector<int> { iterationCounter_ }, outputRays);
-
-		chronoEverything.reset();
-		chronoEverything.start();
-
-		for (auto v : verticesToBeRemovedIdx_) {
-			auto pointId = v->info().getPointId();
-
-			for (auto cameraId : points_[pointId].viewingCams)
-				removeRay(getRayPath(cameraId, pointId));
-
-			removeVertex(pointId);
-		}
-		verticesToBeRemovedIdx_.clear();
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "├ Remove vertices\t\t\t" << chronoEverything.getSeconds() << endl;
-		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
-	} else {
-		if (conf_.timeStatsOutput)
-			cout << "├ Remove vertices\t\t\tSkipped" << endl;
-		timeStatsFile_ << 0.0 << ", ";
-	}
-	cout << "ManifoldMeshReconstructor::rayTracingFromAllCam:\t vertices removed:\t " << verticesRemovedCount << endl;
-
-	/*
-	 *  Points removing
-	 */
-	pointsRemovedCount = pointsToBeRemovedIdx_.size();
-
-	if (pointsToBeRemovedIdx_.size()) {
-		chronoEverything.reset();
-		chronoEverything.start();
-
-		for (auto id : pointsToBeRemovedIdx_) {
-			if (!points_[id].notTriangulated)
-				removeVertex(id);
-		}
-		pointsToBeRemovedIdx_.clear();
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "├ Remove points\t\t\t" << chronoEverything.getSeconds() << endl;
-		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
-	} else {
-		if (conf_.timeStatsOutput)
-			cout << "├ Remove points\t\t\tSkipped" << endl;
-		timeStatsFile_ << 0.0 << ", ";
-	}
-	cout << "ManifoldMeshReconstructor::rayTracingFromAllCam:\t points removed:\t " << pointsRemovedCount << endl;
-
-	/*
-	 *  Vertex inserting
-	 */
-
-	if (updatedCamerasIdx_.size()) {
-		chronoEverything.reset();
-		chronoEverything.start();
-
-		for (auto updatedCameraIndex : updatedCamerasIdx_) {
-
-			for (auto pIndex : cams_[updatedCameraIndex].newVisiblePoints) {
-				PointReconstruction& point = points_[pIndex];
-
-				if (point.notTriangulated) {
-
-					if (utilities::distanceEucl(point.position, cams_[updatedCameraIndex].position) < conf_.maxDistanceCameraPoints) {
-
-						/*	Try to insert the new point in the triangulation.
-						 * 	When successful, a new vertex corresponding to the nwe point is created,
-						 * 	some cells are removed from the triangulation and replaced by some others.
-						 */
-						if (insertVertex(point)) {
-							addedPointsStat++;
-							point.vertexHandle->info().setLastCam(updatedCameraIndex);
-						}
-					}
-
-				} else {
-					raysToBeTraced_.insert(pair<int, int>(updatedCameraIndex, point.idReconstruction));
-					point.vertexHandle->info().setLastCam(updatedCameraIndex);
-					for (auto c : point.viewingCams) {
-						if (c <= updatedCameraIndex)
-							point.vertexHandle->info().addCam(updatedCameraIndex);
-					}
-
-				}
-			}
-
-			cams_[updatedCameraIndex].newVisiblePoints.clear(); // TODO test
-
-		}
-		updatedCamerasIdx_.clear();
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "├ Add new vertices\t\t" << chronoEverything.getSeconds() << endl;
-		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
-	} else {
-		if (conf_.timeStatsOutput)
-			cout << "├ Add new vertices\t\tSkipped" << endl;
-		timeStatsFile_ << 0.0 << ", ";
-	}
-
-	/*
-	 *  Vertex moving
-	 */
-
-	if (conf_.enablePointsPositionUpdate && pointsMovedIdx_.size()) {
-		chronoEverything.reset();
-		chronoEverything.start();
-
-		for (auto id : pointsMovedIdx_) {
-
-			Segment s = Segment(points_[id].position, points_[id].newPosition);
-
-			bool moved;
-			moved = moveVertex(id);
-
-			if (moved)
-				movedPointsStat++;
-
-			if (conf_.debugOutput)
-				if (moved)
-					movedPointsSegments_.push_back(s);
-
-		}
-		pointsMovedIdx_.clear();
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "├ Move vertices\t\t\t" << chronoEverything.getSeconds() << endl;
-		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
-	} else {
-		if (conf_.timeStatsOutput)
-			cout << "├ Move vertices\t\t\tSkipped" << endl;
-		timeStatsFile_ << 0.0 << ", ";
-	}
-
-	if (conf_.debugOutput)
-		outputM_->writeRaysToOFF("output/moved_points/moved_points", std::vector<int> { }, movedPointsSegments_);
-
-	/*
-	 *  Camera moving
-	 */
-
-	if (movedCamerasIdx_.size()) {
-		chronoEverything.reset();
-		chronoEverything.start();
-
-		for (int cameraIndex : movedCamerasIdx_) {
-			moveCameraConstraints(cameraIndex);
-		}
-		movedCamerasIdx_.clear();
-
-		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "├ Move Cameras\t\t\t" << chronoEverything.getSeconds() << endl;
-		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
-	} else {
-		if (conf_.timeStatsOutput)
-			cout << "├ Move Cameras\t\t\tSkipped" << endl;
-		timeStatsFile_ << 0.0 << ", ";
-	}
-
-	/*
-	 *  Ray untracing
-	 *  Ray tracing
-	 *  Ray retracing
-	 */
-
-	raysToBeChecked_.insert(raysToBeTraced_.begin(), raysToBeTraced_.end());
-
-	rayTracingFromAllCam();
-
-	/*
-	 *  Grow
-	 */
-
-	growManifold3(enclosingVolumeMapIndices);
-
-	/*
-	 *  Ray checking
-	 */
-	for (auto cIndex_pIndex : raysToBeChecked_) {
-		RayPath* r = getRayPath(cIndex_pIndex.first, cIndex_pIndex.second);
-		for (Delaunay3::Cell_handle c : r->path) {
-			if (!c->info().iskeptManifold()) {
-				r->valid = false;
-				raysNotValid_.insert(cIndex_pIndex);
-			}
-
-		}
-	}
-	raysToBeChecked_.clear();
-
-	timeStatsFile_ << manifoldManager_->chronoInsertInBoundary_.getSeconds() << ", ";
-	timeStatsFile_ << manifoldManager_->chronoRemoveFromBoundary_.getSeconds() << ", ";
-
-	timeStatsFile_ << (float) addedPointsStat / 100 / updatedCamerasStat << ", ";
-	timeStatsFile_ << (float) movedPointsStat / 100 / updatedCamerasStat << ", ";
-
-	if (conf_.timeStatsOutput) {
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t updated cameras:\t\t\t" << updatedCamerasStat << endl;
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t added points:\t\t\t" << addedPointsStat << endl;
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t moved points:\t\t\t" << movedPointsStat << endl;
-
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t insertInBoundary_:\t\t\t" << manifoldManager_->chronoInsertInBoundary_.getSeconds() << " s" << endl;
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t mm \t removeFromBoundary_:\t\t\t" << manifoldManager_->chronoRemoveFromBoundary_.getSeconds() << " s" << endl;
-
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t useless:\t\t\t" << rt2_ChronoUseless_.getSeconds() << " s" << endl;
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t first cell:\t\t\t" << rt2_ChronoFirstCell_.getSeconds() << " s" << endl;
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t cell traversing:\t\t" << rt2_ChronoCellTraversing_.getSeconds() << " s" << endl;
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t index cache hit ratio:\t\t" << (double) rt2_SuccessfulCachedIndices / (double) rt2_TriedCachedIndices << endl;
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t neighbours weight update:\t\t" << rt2_ChronoNeighboursD1WeightUpdate_.getSeconds() << " s\t / \t" << rt2_CountNeighboursD1WeightUpdate_ << endl;
-		cout << "ManifoldMeshReconstructor::updateTriangulation:\t\t\t rt2\t neighbours int insert/remove:\t\t" << rt2_ChronoNeighboursD2WeightUpdate_.getSeconds() << " s\t / \t" << rt2_CountNeighboursD2WeightUpdate_ << endl;
-		cout << endl;
-	}
-
-	iterationCounter_++;
-}
-
 void ManifoldMeshReconstructor::rayTracingFromAllCam() {
 	Chronometer chronoEverything;
 
@@ -626,17 +597,15 @@ void ManifoldMeshReconstructor::rayTracingFromAllCam() {
 		chronoEverything.start();
 
 		for (auto cIndex_pIndex : raysToBeUntraced_) {
-			rayUntracing2(getRayPath(cIndex_pIndex.first, cIndex_pIndex.second));
+			rayUntracing(getRayPath(cIndex_pIndex.first, cIndex_pIndex.second));
 		}
 		raysToBeUntraced_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "│ ├ rayUntracing\t\t" << chronoEverything.getSeconds() << endl;
+		if (conf_.timeStatsOutput) cout << "rayUntracing\t\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput)
-			cout << "│ ├ rayUntracing\t\tSkipped" << endl;
+		if (conf_.timeStatsOutput) cout << "rayUntracing\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 
@@ -645,17 +614,15 @@ void ManifoldMeshReconstructor::rayTracingFromAllCam() {
 		chronoEverything.start();
 		for (auto cIndex_pIndex : raysToBeTraced_) {
 			raysToBeRetraced_.erase(cIndex_pIndex);
-			rayTracing4(cIndex_pIndex.first, cIndex_pIndex.second);
+			rayTracing(cIndex_pIndex.first, cIndex_pIndex.second);
 		}
 		raysToBeTraced_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "│ ├ rayTracing\t\t\t" << chronoEverything.getSeconds() << endl;
+		if (conf_.timeStatsOutput) cout << "rayTracing\t\t\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput)
-			cout << "│ ├ rayTracing\t\t\tSkipped" << endl;
+		if (conf_.timeStatsOutput) cout << "rayTracing\t\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 
@@ -663,7 +630,7 @@ void ManifoldMeshReconstructor::rayTracingFromAllCam() {
 		chronoEverything.reset();
 		chronoEverything.start();
 		for (auto cIndex_pIndex : raysToBeRetraced_) {
-			rayRetracing4(cIndex_pIndex.first, cIndex_pIndex.second);
+			rayRetracing(cIndex_pIndex.first, cIndex_pIndex.second);
 		}
 		raysToBeRetraced_.clear();
 
@@ -677,40 +644,15 @@ void ManifoldMeshReconstructor::rayTracingFromAllCam() {
 		newCells_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput)
-			cout << "│ ├ rayRetracing\t\t" << chronoEverything.getSeconds() << endl;
+		if (conf_.timeStatsOutput) cout << "rayRetracing\t\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput)
-			cout << "│ ├ rayRetracing\t\tSkipped" << endl;
+		if (conf_.timeStatsOutput) cout << "rayRetracing\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 }
 
-void ManifoldMeshReconstructor::rayUntracing2(RayPath* rayPath) {
-	int cameraIndex = rayPath->cameraId;
-	int pointIndex = rayPath->pointId;
-
-	// Remove all the dead cells from the path
-	rayPath->path.erase(std::remove_if(rayPath->path.begin(), rayPath->path.end(), [&](Delaunay3::Cell_handle cell) {
-		return !dt_.is_cell(cell);
-	}), rayPath->path.end());
-
-	// For all the cells in the ray's path, do the opposite of rayTracing
-	for (auto c : rayPath->path) {
-		unmarkCell(c, cameraIndex, pointIndex);
-	}
-
-	// Remove all cells from the path (rayTracing will add them back)
-	rayPath->path.clear();
-
-}
-
-void ManifoldMeshReconstructor::rayRetracing4(int cameraIndex, int pointIndex) {
-	rayTracing4(cameraIndex, pointIndex, true);
-}
-
-void ManifoldMeshReconstructor::rayTracing4(int cameraIndex, int pointIndex, bool retrace) {
+void ManifoldMeshReconstructor::rayTracing(int cameraIndex, int pointIndex, bool retrace) {
 	std::vector<Delaunay3::Cell_handle> incidentCells;
 	Delaunay3::Cell_handle previousCell, currentCell, targetCell;
 	Vertex3D_handle vertexHandle = points_[pointIndex].vertexHandle;
@@ -718,15 +660,14 @@ void ManifoldMeshReconstructor::rayTracing4(int cameraIndex, int pointIndex, boo
 	int li, lj;
 
 	PointD3 source = points_[pointIndex].position;
-	PointD3 target = cams_[cameraIndex].position;
+	PointD3 target = cameras_[cameraIndex].position;
 	Segment constraint = Segment(source, target);
 
 	bool firstExitFacetFound = false;
 	long int iterationCount = 0;
 
 	RayPath* rayPath = getRayPath(cameraIndex, pointIndex);
-	if (!retrace && rayPath->path.size())
-		cerr << "ManifoldMeshReconstructor::rayTracing: ray path not empty before rayTracing for ray " << cameraIndex << ", " << pointIndex << endl;
+	if (!retrace && rayPath->path.size()) cerr << "ManifoldMeshReconstructor::rayTracing: ray path not empty before rayTracing for ray " << cameraIndex << ", " << pointIndex << endl;
 	rayPath->path.clear();
 
 	if (vertexHandle == NULL) {
@@ -739,10 +680,8 @@ void ManifoldMeshReconstructor::rayTracing4(int cameraIndex, int pointIndex, boo
 	// incidentCells contains the cells incident to the point's vertex
 	dt_.incident_cells(vertexHandle, std::back_inserter(incidentCells));
 
-	if (incidentCells.size() == 0)
-		std::cerr << "ManifoldMeshReconstructor::rayTracing: no incident cells found for ray " << cameraIndex << ", " << pointIndex << std::endl;
-	if (vertexHandle == NULL)
-		std::cerr << "ManifoldMeshReconstructor::rayTracing: vertexHandle is NULL for ray " << cameraIndex << ", " << pointIndex << std::endl;
+	if (incidentCells.size() == 0) std::cerr << "ManifoldMeshReconstructor::rayTracing: no incident cells found for ray " << cameraIndex << ", " << pointIndex << std::endl;
+	if (vertexHandle == NULL) std::cerr << "ManifoldMeshReconstructor::rayTracing: vertexHandle is NULL for ray " << cameraIndex << ", " << pointIndex << std::endl;
 
 	// Locate the target cell
 	targetCell = dt_.locate(target, lt, li, lj);
@@ -765,8 +704,7 @@ void ManifoldMeshReconstructor::rayTracing4(int cameraIndex, int pointIndex, boo
 	for (auto i : incidentCells) {
 		if (i == targetCell) {
 			markCell(i, cameraIndex, pointIndex, rayPath->path, retrace);
-			if (!retrace && conf_.enableRayMistrust)
-				markRemovalCandidateRays(vertexHandle, i, incidentCells); // TODO also if retracing?
+			if (!retrace && conf_.enableRayMistrust) markRemovalCandidateRays(vertexHandle, i, incidentCells); // TODO also if retracing?
 			return;
 		}
 	}
@@ -783,8 +721,7 @@ void ManifoldMeshReconstructor::rayTracing4(int cameraIndex, int pointIndex, boo
 			firstExitFacetFound = true;
 
 			markCell(i, cameraIndex, pointIndex, rayPath->path, retrace);
-			if (!retrace && conf_.enableRayMistrust)
-				markRemovalCandidateRays(vertexHandle, i, incidentCells); // TODO also if retracing?
+			if (!retrace && conf_.enableRayMistrust) markRemovalCandidateRays(vertexHandle, i, incidentCells); // TODO also if retracing?
 
 			previousCell = i;
 			currentCell = i->neighbor(facetIndex);
@@ -807,33 +744,39 @@ void ManifoldMeshReconstructor::rayTracing4(int cameraIndex, int pointIndex, boo
 		markCell(currentCell, cameraIndex, pointIndex, rayPath->path, retrace);
 	} while (nextCellOnRay(currentCell, previousCell, targetCell, constraint) && iterationCount < 10000); // TODO no magic
 
-	if (iterationCount >= 10000)
-		cerr << "ManifoldMeshReconstructor::rayTracing: max iterations exceeded for ray " << cameraIndex << ", " << pointIndex << endl;
+	if (iterationCount >= 10000) cerr << "ManifoldMeshReconstructor::rayTracing: max iterations exceeded for ray " << cameraIndex << ", " << pointIndex << endl;
 
 	rt2_ChronoCellTraversing_.stop();
 
 }
 
-// TODO how much useful is this, again? (wrt retracing all ray)
-void ManifoldMeshReconstructor::perHoleRayRetracing(std::set<Delaunay3::Cell_handle>& newCells) {
-	// The boundary is the set of faces between the old cells and the new cells.
-	// All new cells have at least one face in the boundary.
-	// All deleted cells also had at least one face in the boundary.
+void ManifoldMeshReconstructor::rayRetracing(int cameraIndex, int pointIndex) {
+	rayTracing(cameraIndex, pointIndex, true);
+}
 
-	// Step 1.
-	// newCell is intersected by all rays that intersected some of its boundary face.
-	// For each of these intersections update the weight of newCell
+void ManifoldMeshReconstructor::rayUntracing(RayPath* rayPath) {
+	int cameraIndex = rayPath->cameraId;
+	int pointIndex = rayPath->pointId;
 
-	// Step 2.
-	// It's possible that a newCell
+	// Remove all the dead cells from the path
+	rayPath->path.erase(std::remove_if(rayPath->path.begin(), rayPath->path.end(), [&](Delaunay3::Cell_handle cell) {
+		return !dt_.is_cell(cell);
+	}), rayPath->path.end());
+
+	// For all the cells in the ray's path, do the opposite of rayTracing
+	for (auto c : rayPath->path) {
+		unmarkCell(c, cameraIndex, pointIndex);
+	}
+
+	// Remove all cells from the path (rayTracing will add them back)
+	rayPath->path.clear();
 
 }
 
 bool ManifoldMeshReconstructor::nextCellOnRay(Delaunay3::Cell_handle& currentCell, Delaunay3::Cell_handle& previousCell,
 		const Delaunay3::Cell_handle& targetCell, const Segment& constraint) {
 
-	if (currentCell == targetCell)
-		return false;
+	if (currentCell == targetCell) return false;
 
 	int cachedFacetIndex = currentCell->info().getRayTracingLastFacetIndex();
 
@@ -859,8 +802,7 @@ bool ManifoldMeshReconstructor::nextCellOnRay(Delaunay3::Cell_handle& currentCel
 	for (int facetIndex = 0; facetIndex < 4; facetIndex++) {
 
 		// Since the cached facet index has already been checked, don't try again
-		if (cachedFacetIndex == facetIndex)
-			continue;
+		if (cachedFacetIndex == facetIndex) continue;
 
 		Delaunay3::Cell_handle candidateNextCell = currentCell->neighbor(facetIndex);
 
@@ -890,13 +832,12 @@ void ManifoldMeshReconstructor::markCell(Delaunay3::Cell_handle& c, const int ca
 	if (!onlyMarkNewCells || c->info().isNew()) {
 
 		rt2_ChronoNeighboursD1WeightUpdate_.start();
-		c->info().incrementVoteCount(1);
-		c->info().incrementVoteCountProb(conf_.w_1);
+		c->info().incrementNonConicFreeVote(1);
+		c->info().incrementFreeVote(conf_.w_1);
 		rt2_ChronoNeighboursD1WeightUpdate_.stop();
 
 		rt2_ChronoNeighboursD2WeightUpdate_.start();
-//		if (!conf_.enableSuboptimalPolicy)
-		c->info().addIntersection(cameraIndex, pointIndex, conf_.w_1);
+		c->info().addIntersection(cameraIndex, pointIndex);
 		rt2_ChronoNeighboursD2WeightUpdate_.stop();
 
 		rt2_ChronoNeighboursD1WeightUpdate_.start();
@@ -904,16 +845,16 @@ void ManifoldMeshReconstructor::markCell(Delaunay3::Cell_handle& c, const int ca
 			Delaunay3::Cell_handle n1 = c->neighbor(in1);
 
 			if (!onlyMarkNewCells || c->info().isNew()) {
-				n1->info().incrementVoteCount(1);
-				n1->info().incrementVoteCountProb(conf_.w_2);
+				n1->info().incrementNonConicFreeVote(1);
+				n1->info().incrementFreeVote(conf_.w_2);
 			}
 
 			for (int in2 = 0; in2 < 4; in2++) {
 				Delaunay3::Cell_handle n2 = n1->neighbor(in2);
 
 				if (!onlyMarkNewCells || c->info().isNew()) {
-					n2->info().incrementVoteCount(1);
-					n2->info().incrementVoteCountProb(conf_.w_3);
+					n2->info().incrementNonConicFreeVote(1);
+					n2->info().incrementFreeVote(conf_.w_3);
 				}
 
 			}
@@ -927,8 +868,8 @@ void ManifoldMeshReconstructor::markCell(Delaunay3::Cell_handle& c, const int ca
 void ManifoldMeshReconstructor::unmarkCell(Delaunay3::Cell_handle& c, const int cameraIndex, const int pointIndex) {
 
 	rt2_ChronoNeighboursD1WeightUpdate_.start();
-	c->info().decrementVoteCount(1);
-	c->info().decrementVoteCountProb(conf_.w_1);
+	c->info().decrementNonConicFreeVote(1);
+	c->info().decrementFreeVote(conf_.w_1);
 	rt2_ChronoNeighboursD1WeightUpdate_.stop();
 
 	rt2_ChronoNeighboursD2WeightUpdate_.start();
@@ -939,14 +880,14 @@ void ManifoldMeshReconstructor::unmarkCell(Delaunay3::Cell_handle& c, const int 
 	for (int in1 = 0; in1 < 4; in1++) {
 		Delaunay3::Cell_handle n1 = c->neighbor(in1);
 
-		n1->info().decrementVoteCount(1);
-		n1->info().decrementVoteCountProb(conf_.w_2);
+		n1->info().decrementNonConicFreeVote(1);
+		n1->info().decrementFreeVote(conf_.w_2);
 
 		for (int in2 = 0; in2 < 4; in2++) {
 			Delaunay3::Cell_handle n2 = n1->neighbor(in2);
 
-			n2->info().decrementVoteCount(1);
-			n2->info().decrementVoteCountProb(conf_.w_3);
+			n2->info().decrementNonConicFreeVote(1);
+			n2->info().decrementFreeVote(conf_.w_3);
 		}
 	}
 	rt2_ChronoNeighboursD1WeightUpdate_.stop();
@@ -973,38 +914,93 @@ void ManifoldMeshReconstructor::markRemovalCandidateRays(Vertex3D_handle& v, Del
 	// TODO can take into account the freeVote of cell i (to avoid mass removing)?
 }
 
-void ManifoldMeshReconstructor::removeRay(RayPath* r) {
-
-	// Untrace the ray
-	rayUntracing2(r);
-
-	// Remove the visibility pair
-	removeVisibilityPair(r);
-
-	// Remove it from the paths
-	eraseRayPath(r);
-}
-
-void ManifoldMeshReconstructor::growManifold3(const std::set<index3>& enclosingVolumeMapIndices) {
+void ManifoldMeshReconstructor::shrinkManifold(const std::set<index3>& enclosingVolumeMapIndices) {
 	Chronometer chronoEverything;
 
-	if (conf_.debugOutput)
-		saveBoundary(1, 0);
+	if (conf_.debugOutput) saveBoundary(0, 0);
 
-	// TODO move the initialisation to updateTriangulation
+	chronoEverything.reset();
+	chronoEverything.start();
+
+	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+
+	chronoEverything.stop();
+	if (conf_.timeStatsOutput) cout << "\tshrink\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+	timerShrinkTime_ += chronoEverything.getSeconds();
+
+	if (conf_.debugOutput) saveBoundary(0, 1);
+
+	manifoldManager_->checkBoundaryIntegrity();
+
+	chronoEverything.reset();
+	chronoEverything.start();
+
+	manifoldManager_->shrinkSeveralAtOnce3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+
+	chronoEverything.stop();
+	if (conf_.timeStatsOutput) cout << "\tshrinkSeveral\t\t" << chronoEverything.getSeconds() << endl << endl;
+	timerShrinkSeveralTime_ += chronoEverything.getSeconds();
+
+	if (conf_.debugOutput) saveBoundary(0, 2);
+
+	manifoldManager_->checkBoundaryIntegrity();
+
+	chronoEverything.reset();
+	chronoEverything.start();
+
+	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+
+	chronoEverything.stop();
+	if (conf_.timeStatsOutput) cout << "\tshrink\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+	timerShrinkTime_ += chronoEverything.getSeconds();
+
+	if (conf_.debugOutput) saveBoundary(0, 3);
+
+	manifoldManager_->checkBoundaryIntegrity();
+
+	chronoEverything.reset();
+	chronoEverything.start();
+
+	manifoldManager_->shrinkSeveralAtOnce3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+
+	if (conf_.timeStatsOutput) cout << "\tshrinkSeveral\t\t" << chronoEverything.getSeconds() << endl << endl;
+	timerShrinkSeveralTime_ += chronoEverything.getSeconds();
+
+	if (conf_.debugOutput) saveBoundary(0, 4);
+
+	manifoldManager_->checkBoundaryIntegrity();
+
+	chronoEverything.reset();
+	chronoEverything.start();
+
+	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+
+	chronoEverything.stop();
+	if (conf_.timeStatsOutput) cout << "\tshrink\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+	timerShrinkTime_ += chronoEverything.getSeconds();
+
+	if (conf_.debugOutput) saveBoundary(0, 5);
+
+}
+
+void ManifoldMeshReconstructor::growManifold(const std::set<index3>& enclosingVolumeMapIndices) {
+	Chronometer chronoEverything;
+
+	if (conf_.debugOutput) saveBoundary(1, 0);
+
 	chronoEverything.reset();
 	chronoEverything.start();
 	if (manifoldManager_->getBoundarySize() == 0) {
 		double max = 0.0;
 		Delaunay3::Cell_handle startingCell;
-
+		cout << "ManifoldMeshReconstructor::growManifold: \t\t boundary is still empty, growing from the cell with highest vote" << endl;
 		// If the boundary is still empty, start growing from the cell with highest vote
 		//TODO from every cell conaining cameras; otherwise disconnected spaces wouldn't all be grown
 		for (Delaunay3::Finite_cells_iterator itCell = dt_.finite_cells_begin(); itCell != dt_.finite_cells_end();
 				itCell++) {
 
-			if (itCell->info().getVoteCountProb() > max) {
-				max = itCell->info().getVoteCountProb();
+			if (itCell->info().getFreeVote() > max) {
+				max = itCell->info().getFreeVote();
 				startingCell = itCell;
 			}
 		}
@@ -1014,35 +1010,35 @@ void ManifoldMeshReconstructor::growManifold3(const std::set<index3>& enclosingV
 		manifoldManager_->regionGrowing3(enclosingVolumeMapIndices);
 	}
 
+	manifoldManager_->checkBoundaryIntegrity();
+
 	chronoEverything.stop();
-	if (conf_.timeStatsOutput)
-		cout << "│ ├ growManifold\t\t" << chronoEverything.getSeconds() << endl;
+	if (conf_.timeStatsOutput) cout << "growManifold\t\t" << chronoEverything.getSeconds() << endl << endl;
 	timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 
-	if (conf_.debugOutput)
-		saveBoundary(1, 1);
+	if (conf_.debugOutput) saveBoundary(1, 1);
+
+	manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.reset();
 	chronoEverything.start();
 	manifoldManager_->growSeveralAtOnce3(enclosingVolumeMapIndices);
 	chronoEverything.stop();
-	if (conf_.timeStatsOutput)
-		cout << "│ ├ growManifoldSev\t\t" << chronoEverything.getSeconds() << endl;
+	if (conf_.timeStatsOutput) cout << "growManifoldSev\t\t" << chronoEverything.getSeconds() << endl << endl;
 	timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 
-	if (conf_.debugOutput)
-		saveBoundary(1, 2);
+	if (conf_.debugOutput) saveBoundary(1, 2);
+
+	manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.reset();
 	chronoEverything.start();
 	manifoldManager_->regionGrowing3(enclosingVolumeMapIndices);
 	chronoEverything.stop();
-	if (conf_.timeStatsOutput)
-		cout << "│ ├ growManifold\t\t" << chronoEverything.getSeconds() << endl;
+	if (conf_.timeStatsOutput) cout << "growManifold\t\t" << chronoEverything.getSeconds() << endl << endl;
 	timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 
-	if (conf_.debugOutput)
-		saveBoundary(1, 3);
+	if (conf_.debugOutput) saveBoundary(1, 3);
 }
 
 void ManifoldMeshReconstructor::saveManifold(const std::string filename) {
@@ -1054,7 +1050,7 @@ void ManifoldMeshReconstructor::saveManifold(const std::string filename) {
 		for (auto rayPath : rayPaths_) {
 
 			PointD3 source = points_[rayPath.second->pointId].position;
-			PointD3 target = cams_[rayPath.second->cameraId].position;
+			PointD3 target = cameras_[rayPath.second->cameraId].position;
 			Segment constraint = Segment(source, target);
 
 			rays.push_back(constraint);
@@ -1065,92 +1061,8 @@ void ManifoldMeshReconstructor::saveManifold(const std::string filename) {
 
 void ManifoldMeshReconstructor::saveBoundary(int i, int j) {
 	std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> b = manifoldManager_->getBoundaryCells();
-	if (b.size())
-		outputM_->writeTetrahedraToOFF("output/boundary/boundary", std::vector<int> { iterationCounter_, i, j }, b);
-}
-
-void ManifoldMeshReconstructor::saveOldManifold(const std::string filename, int idx) {
-	outputM_->writeOFF(filename, idx);
-}
-
-void ManifoldMeshReconstructor::saveOldManifold(const std::string filename, std::vector<int> idx) {
-	outputM_->writeOFF(filename, idx);
-}
-
-void ManifoldMeshReconstructor::saveFreespace(const std::string filename) {
-	outputM_->writeFreespaceOFF(filename);
-}
-
-void ManifoldMeshReconstructor::shrinkManifold3(const std::set<index3>& enclosingVolumeMapIndices) {
-	Chronometer chronoEverything;
-
-	if (conf_.debugOutput)
-		saveBoundary(0, 0);
-
-	chronoEverything.reset();
-	chronoEverything.start();
-
-	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
-
-	chronoEverything.stop();
-	if (conf_.timeStatsOutput)
-		cout << "│ ├ shrink\t\t\t" << chronoEverything.getSeconds() << endl;
-	timerShrinkTime_ += chronoEverything.getSeconds();
-
-	if (conf_.debugOutput)
-		saveBoundary(0, 1);
-
-	chronoEverything.reset();
-	chronoEverything.start();
-
-	manifoldManager_->shrinkSeveralAtOnce3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
-
-	chronoEverything.stop();
-	if (conf_.timeStatsOutput)
-		cout << "│ ├ shrinkSeveral\t\t" << chronoEverything.getSeconds() << endl;
-	timerShrinkSeveralTime_ += chronoEverything.getSeconds();
-
-	if (conf_.debugOutput)
-		saveBoundary(0, 2);
-
-	chronoEverything.reset();
-	chronoEverything.start();
-
-	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
-
-	chronoEverything.stop();
-	if (conf_.timeStatsOutput)
-		cout << "│ ├ shrink\t\t\t" << chronoEverything.getSeconds() << endl;
-	timerShrinkTime_ += chronoEverything.getSeconds();
-
-	if (conf_.debugOutput)
-		saveBoundary(0, 3);
-
-	chronoEverything.reset();
-	chronoEverything.start();
-
-	manifoldManager_->shrinkSeveralAtOnce3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
-
-	if (conf_.timeStatsOutput)
-		cout << "│ ├ shrinkSeveral\t\t" << chronoEverything.getSeconds() << endl;
-	timerShrinkSeveralTime_ += chronoEverything.getSeconds();
-
-	if (conf_.debugOutput)
-		saveBoundary(0, 4);
-
-	chronoEverything.reset();
-	chronoEverything.start();
-
-	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
-
-	chronoEverything.stop();
-	if (conf_.timeStatsOutput)
-		cout << "│ ├ shrink\t\t\t" << chronoEverything.getSeconds() << endl;
-	timerShrinkTime_ += chronoEverything.getSeconds();
-
-	if (conf_.debugOutput)
-		saveBoundary(0, 5);
-
+	if (b.size()) outputM_->writeTetrahedraToOFF("output/boundary/boundary",
+			std::vector<int> { iterationCounter_, i, j }, b);
 }
 
 void ManifoldMeshReconstructor::initSteinerPointGridAndBound() {
@@ -1223,23 +1135,19 @@ void ManifoldMeshReconstructor::updateSteinerPointGridAndBound() {
 
 	dt_.insert(newPoints.begin(), newPoints.end());
 
+	if (conf_.timeStatsOutput) cout << "ManifoldMeshReconstructor::updateSteinerPointGridAndBound: \t added Steiner points: \t\t\t" << newPoints.size() << endl;
+
 }
 
 void ManifoldMeshReconstructor::updateSteinerGridTargetBounds(float x, float y, float z) {
-	if (sgMinX_ > x)
-		sgMinX_ = x;
-	if (sgMaxX_ < x)
-		sgMaxX_ = x;
+	if (sgMinX_ > x) sgMinX_ = x;
+	if (sgMaxX_ < x) sgMaxX_ = x;
 
-	if (sgMinY_ > y)
-		sgMinY_ = y;
-	if (sgMaxY_ < y)
-		sgMaxY_ = y;
+	if (sgMinY_ > y) sgMinY_ = y;
+	if (sgMaxY_ < y) sgMaxY_ = y;
 
-	if (sgMinZ_ > z)
-		sgMinZ_ = z;
-	if (sgMaxZ_ < z)
-		sgMaxZ_ = z;
+	if (sgMinZ_ > z) sgMinZ_ = z;
+	if (sgMaxZ_ < z) sgMaxZ_ = z;
 }
 
 bool ManifoldMeshReconstructor::insertVertex(PointReconstruction& point) {
@@ -1273,31 +1181,16 @@ bool ManifoldMeshReconstructor::insertVertex(PointReconstruction& point) {
 	dt_.find_conflicts(point.position, c, CGAL::Oneset_iterator<Delaunay3::Facet>(f), std::back_inserter(removedCells));
 
 	for (auto cell : removedCells)
-		if (cell->info().isBoundary())
-			cerr << "ManifoldMeshReconstructor::insertVertex: destroying boundary cells" << std::endl;
+		if (cell->info().getBoundaryFlag()) cerr << "ManifoldMeshReconstructor::insertVertex: destroying boundary cells" << std::endl;
 
 	for (auto removedCell : removedCells) {
-		for (auto constraint : removedCell->info().getIntersections())
-			raysToBeRetraced.insert(pair<int, int>(constraint.first, constraint.second));
+		for (auto intersection : removedCell->info().getIntersections())
+			raysToBeRetraced.insert(pair<int, int>(intersection.first, intersection.second));
 	}
 
 	// Schedule a reyRetracing for all the rays that intersected the removed cells
-	for (auto ray : raysToBeRetraced) {
+	for (auto ray : raysToBeRetraced)
 		raysToBeRetraced_.insert(pair<int, int>(ray.first, ray.second));
-		//rayRetracing(ray.first, ray.second, newCellsFromHole);
-
-		std::vector<Delaunay3::Cell_handle>& path = getRayPath(ray.first, ray.second)->path;
-
-		// rayRetracing will manage the dead cells
-		// TODO removed to make the path a vector
-//		// TODO this is probably slower than something else.
-//		// Remove dead cells from paths
-//		for (auto removedCell : removedCells) {
-//			path.erase(std::remove_if(path.begin(), path.end(), [&](Delaunay3::Cell_handle cell) {
-//				return cell == removedCell;
-//			}), path.end());
-//		}
-	}
 
 	// Creates a new vertex by starring a hole. Delete all the cells describing the hole vecConflictCells, creates a new vertex hndlQ, and for each facet on the boundary of the hole f, creates a new cell with hndlQ as vertex.
 	Vertex3D_handle vertexHandle = dt_.insert_in_hole(point.position, removedCells.begin(), removedCells.end(), f.first,
@@ -1320,8 +1213,8 @@ bool ManifoldMeshReconstructor::insertVertex(PointReconstruction& point) {
 
 }
 
-int ManifoldMeshReconstructor::moveVertex(int idxPoint) {
-	PointReconstruction& point = points_[idxPoint];
+bool ManifoldMeshReconstructor::moveVertex(int pointIndex) {
+	PointReconstruction& point = points_[pointIndex];
 
 	if (!point.toBeMoved) {
 		return false;
@@ -1330,7 +1223,7 @@ int ManifoldMeshReconstructor::moveVertex(int idxPoint) {
 	Delaunay3::Vertex_handle vertexHandle = point.vertexHandle;
 
 	if ((point.notTriangulated && vertexHandle != NULL) || (!point.notTriangulated && vertexHandle == NULL)) {
-		std::cerr << "ManifoldMeshReconstructor::moveVertex: point " << idxPoint << " new xnor (hndlQ == NULL)" << std::endl;
+		std::cerr << "ManifoldMeshReconstructor::moveVertex: point " << pointIndex << " new xnor (hndlQ == NULL)" << std::endl;
 	}
 
 	// If the point isn't in the triangulation, do nothing
@@ -1339,7 +1232,7 @@ int ManifoldMeshReconstructor::moveVertex(int idxPoint) {
 	}
 
 	if (vertexHandle->point() != point.position) {
-		std::cerr << "ManifoldMeshReconstructor::moveVertex: inconsistent position between vertex handle and point position for point " << idxPoint << std::endl;
+		std::cerr << "ManifoldMeshReconstructor::moveVertex: inconsistent position between vertex handle and point position for point " << pointIndex << std::endl;
 	}
 
 	PointD3 initialPosition = vertexHandle->point();
@@ -1347,7 +1240,7 @@ int ManifoldMeshReconstructor::moveVertex(int idxPoint) {
 
 	bool canMove = true;
 	for (int cIndex : point.viewingCams) {
-		CamReconstruction c = cams_[cIndex];
+		CamReconstruction c = cameras_[cIndex];
 		if (utilities::distanceEucl(c.position, newPosition) > conf_.maxDistanceCameraPoints) {
 			canMove = false;
 			break;
@@ -1373,7 +1266,7 @@ int ManifoldMeshReconstructor::moveVertex(int idxPoint) {
 
 		// Step 0
 		// Undo rayTracing for all cells on the rayPaths concerning the point and schedule the rayTracing on those rays
-		for (auto rayPath : getRayPathsFromPoint(idxPoint)) {
+		for (auto rayPath : getRayPathsFromPoint(pointIndex)) {
 			//rayUntracing(rayPath);
 			raysToBeUntraced_.insert(pair<int, int>(rayPath->cameraId, rayPath->pointId));
 
@@ -1397,8 +1290,7 @@ int ManifoldMeshReconstructor::moveVertex(int idxPoint) {
 		}
 
 		for (auto cell : deadCells)
-			if (cell->info().isBoundary())
-				cerr << "ManifoldMeshReconstructor::moveVertex: destroying boundary cells" << std::endl;
+			if (cell->info().getBoundaryFlag()) cerr << "ManifoldMeshReconstructor::moveVertex: destroying boundary cells" << std::endl;
 
 		// Step 2
 		// Remove the vertex from the triangulation
@@ -1429,8 +1321,7 @@ int ManifoldMeshReconstructor::moveVertex(int idxPoint) {
 		}
 
 		for (auto cell : vecConflictCells)
-			if (cell->info().isBoundary())
-				cerr << "ManifoldMeshReconstructor::moveVertex: destroying boundary cells" << std::endl;
+			if (cell->info().getBoundaryFlag()) cerr << "ManifoldMeshReconstructor::moveVertex: destroying boundary cells" << std::endl;
 
 		// Step 4
 		// Fill the hole by inserting the new vertex
@@ -1446,44 +1337,34 @@ int ManifoldMeshReconstructor::moveVertex(int idxPoint) {
 
 		// Step 8
 		// Schedule retracing all rays that intersected removed cells
-		for (auto ray : raysToBeRetraced) {
+		for (auto ray : raysToBeRetraced)
 			raysToBeRetraced_.insert(pair<int, int>(ray.first, ray.second));
-
-			// TODO removed to make the path a vector
-			// Remove the dead cells from paths
-//			for (auto deadCell : deadCells) {
-//				getRayPath(ray.first, ray.second)->path.erase(deadCell);
-//			}
-
-			//rayRetracing(ray.first, ray.second, newCells_);
-		}
 
 		return true;
 	} else {
-		//cout << "moveVertex refused" << endl;
 		return false;
 	}
-	return 1;
+	return true;
 
 }
 
-void ManifoldMeshReconstructor::removeVertex(int idxPoint) {
-	PointReconstruction& point = points_[idxPoint];
+void ManifoldMeshReconstructor::removeVertex(int pointIndex) {
+	PointReconstruction& point = points_[pointIndex];
 	Delaunay3::Vertex_handle vertexHandle = point.vertexHandle;
 
 	if ((point.notTriangulated && vertexHandle != NULL) || (!point.notTriangulated && vertexHandle == NULL)) {
-		std::cerr << "ManifoldMeshReconstructor::removeVertex: point " << idxPoint << " new xnor (vertexHandle == NULL)" << std::endl;
+		std::cerr << "ManifoldMeshReconstructor::removeVertex: point " << pointIndex << " new xnor (vertexHandle == NULL)" << std::endl;
 	}
 
 	// If the point isn't in the triangulation, do nothing
 	if (vertexHandle == NULL || point.notTriangulated) {
-		std::cerr << "ManifoldMeshReconstructor::removeVertex: trying to remove a vertex not in triangulation; point " << idxPoint << std::endl;
+		std::cerr << "ManifoldMeshReconstructor::removeVertex: trying to remove a vertex not in triangulation; point " << pointIndex << std::endl;
 
 		return;
 	}
 
 	if (vertexHandle->point() != point.position) {
-		std::cerr << "ManifoldMeshReconstructor::removeVertex: inconsistent position between vertex handle and point position for point " << idxPoint << std::endl;
+		std::cerr << "ManifoldMeshReconstructor::removeVertex: inconsistent position between vertex handle and point position for point " << pointIndex << std::endl;
 	}
 
 	// Set of rays <cameraIndex, pointIndex> intersecting the hole that needs to be retraced
@@ -1502,8 +1383,7 @@ void ManifoldMeshReconstructor::removeVertex(int idxPoint) {
 			raysToBeRetraced.insert(pair<int, int>(intersection.first, intersection.second));
 
 	for (auto cell : deadCells)
-		if (cell->info().isBoundary())
-			cerr << "ManifoldMeshReconstructor::removeVertex: destroying boundary cells; vertex " << idxPoint << std::endl;
+		if (cell->info().getBoundaryFlag()) cerr << "ManifoldMeshReconstructor::removeVertex: destroying boundary cells; vertex " << pointIndex << std::endl;
 
 	// Step 2
 	// Remove the vertex from the triangulation
@@ -1513,16 +1393,12 @@ void ManifoldMeshReconstructor::removeVertex(int idxPoint) {
 	point.vertexHandle = NULL;
 }
 
-void ManifoldMeshReconstructor::moveCameraConstraints(int idxCam) {
-	// The set of all the constraints that
-	SetConstraints setUnionedConstraints;
-
-	CamReconstruction& camera = cams_[idxCam];
+void ManifoldMeshReconstructor::moveCameraConstraints(int cameraIndex) {
+	CamReconstruction& camera = cameras_[cameraIndex];
 	PointD3 camPosition = camera.position;
 	PointD3 newCamPosition = camera.newPosition;
 
-	if (!camera.toBeMoved)
-		return;
+	if (!camera.toBeMoved) return;
 
 	/* 	Let Br be the ball centered on the camera and r the parameter maxDistanceCamFeature.
 	 * 	All the points must be in B if they are added to the triangulation to ensure that manifoldness is preserved.
@@ -1547,7 +1423,7 @@ void ManifoldMeshReconstructor::moveCameraConstraints(int idxCam) {
 		camera.position = camera.newPosition;
 		camera.toBeMoved = false;
 
-		for (auto rayPath : getRayPathsFromCamera(idxCam)) {
+		for (auto rayPath : getRayPathsFromCamera(cameraIndex)) {
 
 			//rayUntracing(rayPath);
 			raysToBeUntraced_.insert(pair<int, int>(rayPath->cameraId, rayPath->pointId));

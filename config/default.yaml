@@ -4,11 +4,12 @@ gamesh:
   enable_points_position_update: true
   enable_ray_mistrust: false
   enable_unused_vertex_removing: false
-  enable_mesh_saving: false
+  enable_mesh_saving: true
   enable_mesh_publishing: true
   generate_colored_mesh: true
   
   free_vote_threshold: 20.0
+  non_conic_free_vote_threshold: 1
   ray_removal_threshold: 2.0
   unused_vertex_removal_threshold: 100000000.0
   primary_points_visibility_threshold: 1

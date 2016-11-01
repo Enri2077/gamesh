@@ -26,7 +26,7 @@ void OutputCreator::tetrahedraToTriangles(std::vector<PointD3>& points, std::vec
 	int numManifold = 0, numNotManifold = 0;
 
 	for (Delaunay3::Cell_iterator itCell = dt_.cells_begin(); itCell != dt_.cells_end(); itCell++) {
-		if ((*itCell).info().iskeptManifold()) {
+		if ((*itCell).info().getManifoldFlag()) {
 			++numManifold;
 		} else {
 			++numNotManifold;
@@ -61,9 +61,9 @@ void OutputCreator::tetrahedraToTriangles(std::vector<PointD3>& points, std::vec
 	// Iterate over finite facets
 	for (Delaunay3::Finite_facets_iterator itFacet = dt_.finite_facets_begin(); itFacet != dt_.finite_facets_end(); itFacet++) {
 		// If one adjacent cell is empty, and the other is not, and if the facet contains no vertex from the bounding vertices, then add a triangle to the mesh (w/ correct orientation).
-		bool bFacetCellKept = itFacet->first->info().iskeptManifold();
+		bool bFacetCellKept = itFacet->first->info().getManifoldFlag();
 
-		bool bMirrorCellKept = itFacet->first->neighbor(itFacet->second)->info().iskeptManifold();
+		bool bMirrorCellKept = itFacet->first->neighbor(itFacet->second)->info().getManifoldFlag();
 		if ((bFacetCellKept != bMirrorCellKept)) {
 			numKept++;
 		} else {
@@ -223,7 +223,7 @@ void OutputCreator::tetrahedraToTriangles(std::vector<PointD3> & points, std::ve
 	int numManifold = 0, numNotManifold = 0;
 
 	for (Delaunay3::Cell_iterator itCell = dt_.cells_begin(); itCell != dt_.cells_end(); itCell++) {
-		if ((*itCell).info().iskeptManifold()) {
+		if ((*itCell).info().getManifoldFlag()) {
 			++numManifold;
 		} else {
 			++numNotManifold;
@@ -283,9 +283,9 @@ void OutputCreator::tetrahedraToTriangles(std::vector<PointD3> & points, std::ve
 	// Iterate over finite facets
 	for (Delaunay3::Finite_facets_iterator itFacet = dt_.finite_facets_begin(); itFacet != dt_.finite_facets_end(); itFacet++) {
 		// If one adjacent cell is empty, and the other is not, and if the facet contains no vertex from the bounding vertices, then add a triangle to the mesh (w/ correct orientation).
-		bool bFacetCellKept = itFacet->first->info().iskeptManifold();
+		bool bFacetCellKept = itFacet->first->info().getManifoldFlag();
 
-		bool bMirrorCellKept = itFacet->first->neighbor(itFacet->second)->info().iskeptManifold();
+		bool bMirrorCellKept = itFacet->first->neighbor(itFacet->second)->info().getManifoldFlag();
 		if ((bFacetCellKept != bMirrorCellKept)) {
 			numKept++;
 		} else {
@@ -345,9 +345,9 @@ void OutputCreator::tetrahedraToTrianglesFreespace(std::vector<PointD3>& points,
 	for (Delaunay3::Cell_iterator itCell = dt_.cells_begin(); itCell != dt_.cells_end(); itCell++) {
 		bool value;
 		if (!weights) {
-			value = !itCell->info().isKeptByVoteCount(nVoteProbThresh);
+			value = !itCell->info().isNotKeptByNonConicFreeVote(nVoteProbThresh);
 		} else {
-			value = !itCell->info().isKeptByVoteCountProb(nVoteProbThresh);
+			value = !itCell->info().isNotKeptByFreeVote(nVoteProbThresh);
 		}
 		if (value) {
 			++numFreeSpaceTets;
@@ -380,8 +380,8 @@ void OutputCreator::tetrahedraToTrianglesFreespace(std::vector<PointD3>& points,
 	// Iterate over finite facets
 	for (Delaunay3::Finite_facets_iterator itFacet = dt_.finite_facets_begin(); itFacet != dt_.finite_facets_end(); itFacet++) {
 		// If one adjacent cell is empty, and the other is not, and if the facet contains no vertex from the bounding vertices, then add a triangle to the mesh (w/ correct orientation).
-		bool bFacetCellKept = itFacet->first->info().isKeptByVoteCount(nVoteProbThresh);
-		bool bMirrorCellKept = itFacet->first->neighbor(itFacet->second)->info().isKeptByVoteCount(nVoteProbThresh);
+		bool bFacetCellKept = itFacet->first->info().isNotKeptByNonConicFreeVote(nVoteProbThresh);
+		bool bMirrorCellKept = itFacet->first->neighbor(itFacet->second)->info().isNotKeptByNonConicFreeVote(nVoteProbThresh);
 		bool toCheck2Manifold = false;
 		if (bFacetCellKept && !bMirrorCellKept) {
 			toCheck2Manifold = true;
@@ -389,7 +389,7 @@ void OutputCreator::tetrahedraToTrianglesFreespace(std::vector<PointD3>& points,
 		for (int cur = 0; cur < 4; cur++) {
 			if (bFacetCellKept && !bMirrorCellKept) {
 				if (cur != itFacet->second) {
-					if (itFacet->first->neighbor(cur)->info().isKeptByVoteCount(nVoteProbThresh)) {
+					if (itFacet->first->neighbor(cur)->info().isNotKeptByNonConicFreeVote(nVoteProbThresh)) {
 						toCheck2Manifold = false;
 					}
 				}
@@ -472,12 +472,12 @@ void OutputCreator::writeBoundaryOFF(const std::string filename, const std::vect
 	for (auto itCellBoundary : boundaryCells) {
 		if (dt_.is_cell(itCellBoundary)) {
 
-			if (!itCellBoundary->info().iskeptManifold()) {
+			if (!itCellBoundary->info().getManifoldFlag()) {
 				countNotManif++;
 			} else {
 
 				for (int curNeigh = 0; curNeigh < 4; ++curNeigh) {
-					if (!itCellBoundary->neighbor(curNeigh)->info().iskeptManifold()) {
+					if (!itCellBoundary->neighbor(curNeigh)->info().getManifoldFlag()) {
 						PointD3 tmptris;
 						PointD3 tmpPoint;
 

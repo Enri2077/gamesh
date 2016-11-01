@@ -157,7 +157,16 @@ include_directories(  ${EIGEN3_INCLUDE_DIR}
 # ----------------------- GCC FLAGS ----------------------------
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fpermissive")
 
-
+option(WITH_OPENMP "Build with OpenMP support for multithreading" ON)
+if (WITH_OPENMP)
+#	find_package(OpenMP QUIET)
+	find_package(OpenMP)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+	set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   ${OpenMP_C_FLAGS}")
+	if (NOT OPENMP_FOUND)
+		set(WITH_OPENMP OFF)
+	endif()
+endif()
 
 
 # ------------------------ BUILD -------------------------------

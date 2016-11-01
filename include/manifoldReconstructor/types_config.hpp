@@ -30,6 +30,7 @@ typedef struct {
 	bool generateColoredMesh;
 
 	float freeVoteThreshold;
+	int nonConicFreeVoteThreshold;
 	float rayRemovalThreshold;
 	float unusedVertexRemovalThreshold;
 	int primaryPointsVisibilityThreshold;
@@ -72,6 +73,7 @@ typedef struct {
 		out << "generateColoredMesh: " << generateColoredMesh << std::endl;
 
 		out << "freeVoteThreshold: " << freeVoteThreshold << std::endl;
+		out << "nonConicFreeVoteThreshold: " << nonConicFreeVoteThreshold << std::endl;
 		out << "rayRemovalThreshold: " << rayRemovalThreshold << std::endl;
 		out << "unusedVertexRemovalThreshold: " << unusedVertexRemovalThreshold << std::endl;
 		out << "primaryPointsVisibilityThreshold: " << primaryPointsVisibilityThreshold << std::endl;
