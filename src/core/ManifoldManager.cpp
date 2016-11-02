@@ -6,7 +6,7 @@
  */
 
 #include <ManifoldManager.h>
-#include <OutputCreator.h>
+//#include <OutputCreator.h>
 #include <OutputManager.h>
 #include <utilities.hpp>
 #include <sstream>
@@ -21,13 +21,14 @@ using std::endl;
 ManifoldManager::ManifoldManager(Delaunay3& dt, ManifoldReconstructionConfig& conf) :
 		dt_(dt), conf_(conf) {
 
-	outputM_ = new OutputCreator(dt_);
-	out_ = new OutputManager(boundaryCellsSpatialMap_, conf);
+//	outputM_ = new OutputCreator(dt_);
+	out_ = new OutputManager(dt_, boundaryCellsSpatialMap_, conf_);
 
 }
 
 ManifoldManager::~ManifoldManager() {
 	boundaryCellsSpatialMap_.clear();
+	delete out_;
 }
 
 bool ManifoldManager::isInEnclosingVolume(Delaunay3::Cell_handle& c, const std::set<index3>& enclosingVolumeMapIndices,
@@ -618,12 +619,12 @@ void ManifoldManager::subCellAndUpdateBoundary(Delaunay3::Cell_handle& c,
 	}
 }
 
-bool ManifoldManager::isFreespace(Delaunay3::Cell_handle& cell) {
+bool ManifoldManager::isFreespace(Delaunay3::Cell_handle& c) {
 	bool value;
 	if (!conf_.enableInverseConic) {
-		value = cell->info().exceedsNonConicFreeVoteThreshold(conf_.nonConicFreeVoteThreshold);
+		value = c->info().exceedsNonConicFreeVoteThreshold(conf_.nonConicFreeVoteThreshold);
 	} else {
-		value = cell->info().exceedsFreeVoteThreshold(conf_.freeVoteThreshold);
+		value = c->info().exceedsFreeVoteThreshold(conf_.freeVoteThreshold);
 	}
 	return value;
 }
@@ -884,6 +885,7 @@ bool ManifoldManager::isRegular(Delaunay3::Vertex_handle& v) {
 
 	// Here condition c is met.
 	// To test conditions c_1 and c_2 it's necessary to populate the graph.
+
 	std::unordered_set<Delaunay3::Vertex_handle> vOppositeBoundaryVertices;
 	std::unordered_map<Delaunay3::Vertex_handle, EdgePair> vertexToEdgesMap;
 
@@ -935,7 +937,7 @@ bool ManifoldManager::isRegular(Delaunay3::Vertex_handle& v) {
 					vOppositeBoundaryVertices.insert(incidentCell->vertex(m));
 					vOppositeBoundaryVertices.insert(incidentCell->vertex(n));
 
-					// To debug: boundaryTriangles.push_back(dt_.triangle(incidentCell, i)); ... outputM_->writeTrianglesToOFF("output/isRegular/v ", std::vector<int> { counter_ }, boundaryTriangles);
+					// To debug: boundaryTriangles.push_back(dt_.triangle(incidentCell, i)); ... manifoldManager_->getOutputManager()->writeTrianglesToOFF("output/isRegular/v ", std::vector<int> { counter_ }, boundaryTriangles);
 				}
 			}
 	}
@@ -971,7 +973,7 @@ bool ManifoldManager::isRegular(Delaunay3::Vertex_handle& v) {
 	while (firstVertex != (currentVertex = currentEdge.otherVertex(currentVertex))) {
 
 		// If the edges connected to the current vertex aren't exactly two
-		// then this is not a cycle and the graph is not binary
+		// then this is not a cycle and the graph is not binary.
 		// This condition should not be possible
 		if (vertexToEdgesMap[currentVertex].edges.size() != 2) {
 			cerr << "ManifoldManager::isRegular \t\t Violated hypothesis: Non binary graph" << endl;
@@ -990,7 +992,7 @@ bool ManifoldManager::isRegular(Delaunay3::Vertex_handle& v) {
 	chronoIsRegularOverall2_.stop();
 	chronoIsRegular_.stop();
 
-	// Condition c_2 is met if there are more vertices than the ones in the walked cycle
+	// Condition c_2 is met if there are more vertices than the ones in the walked cycle.
 	// if c_2 is false the test is successful
 	return verticesInThisCycleCount == vOppositeBoundaryVertices.size();
 

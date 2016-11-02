@@ -14,7 +14,7 @@
 //  GNU General Public License for more details.
 
 #include <CameraPointsCollection.h>
-#include <Logger.h>
+#include <Chronometer.h>
 #include <ReconstructFromSLAMData.h>
 #include <OutputManager.h>
 #include <types_config.hpp>
@@ -162,7 +162,7 @@ bool getParams(ros::NodeHandle& n) {
 			config_.w_m)
 
 	|| !n.getParam("gamesh/save_mesh_every", config_.saveMeshEvery)
-
+	|| !n.getParam("gamesh/check_integrity_when_finished", config_.checkIntegrityWhenFinished)
 	|| !n.getParam("gamesh/time_stats_output", config_.timeStatsOutput) || !n.getParam("gamesh/debug_output",
 			config_.debugOutput) || !n.getParam("gamesh/publish_received_pointcloud", config_.publishReceivedPointcloud) || !n.getParam(
 			"gamesh/publish_used_pointcloud", config_.publishUsedPointcloud)
@@ -200,8 +200,11 @@ int main(int argc, char **argv) {
 //		++a;
 //	}
 
-	utilities::Logger log;
+	Chronometer chronoMain;
+	chronoMain.start();
 	int maxIterations_ = 0;
+
+	std::cout << std::fixed << std::setprecision(3);
 
 	ros::init(argc, argv, "gamesh_node");
 	ros::NodeHandle n;
@@ -226,6 +229,7 @@ int main(int argc, char **argv) {
 	}
 
 	ReconstructFromSLAMData m(config_);
+	m.getOutputManager()->setMeshPublisher(meshPublisher);
 
 	m.setExpectedTotalIterationsNumber((maxIterations_) ? maxIterations_ + 1 : -1);
 
@@ -237,7 +241,8 @@ int main(int argc, char **argv) {
 			ros::Duration(0.1).sleep();
 			ros::spinOnce();
 		} else {
-			log.startEvent();
+			Chronometer chronoMainLoop;
+			chronoMainLoop.start();
 
 			std::cout << "Input cameras buffer size: \t" << newCameras_.size() << "\t num points added: \t" << numPointsAdded_ << std::endl;
 			numPointsAdded_ = 0;
@@ -250,17 +255,22 @@ int main(int argc, char **argv) {
 			m.update();
 
 			if (config_.enableMeshSaving && ros::ok() && m.iterationCount && !(m.iterationCount % config_.saveMeshEvery)) {
-				m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/current.off"); //TODO config
+//				m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/current.off");
+				m.saveMesh(config_.outputFolder, "current");
 			}
 
 			if (config_.enableMeshPublishing) {
-				if (config_.generateColoredMesh) m.getOutputManager()->publishROSColoredMesh(meshPublisher);
-				else m.getOutputManager()->publishROSMesh(meshPublisher);
+//				if (config_.generateColoredMesh) m.getOutputManager()->publishROSColoredMesh(meshPublisher);
+//				else m.getOutputManager()->publishROSMesh(meshPublisher);
+				if (config_.generateColoredMesh) m.getOutputManager()->publishROSColoredMesh();
+				else m.getOutputManager()->publishROSMesh();
 			}
 
-			log.endEventAndPrint("main loop\t\t\t\t\t\t", true);
+
+			chronoMainLoop.stop();
+			std::cout << "main loop\t\t\t\t\t\t" << chronoMainLoop.getSeconds() << std::endl;
 			std::cout << std::endl;
-			m.insertStatValue(log.getLastDelta());
+			m.insertStatValue(chronoMainLoop.getSeconds());
 
 			ros::spinOnce();
 
@@ -273,11 +283,13 @@ int main(int argc, char **argv) {
 	}
 
 	if (config_.enableMeshSaving && m.iterationCount){
-		m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/final.off");
+//		m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/final.off");
+		m.saveMesh(config_.outputFolder, "final");
 	}
-	m.integrityCheck();
+	if(config_.checkIntegrityWhenFinished) m.integrityCheck();
 
-	log.endEventAndPrint("main\t\t\t\t\t\t", true);
+	chronoMain.stop();
+	std::cout << "main\t\t\t\t\t\t" << chronoMain.getSeconds() << std::endl;
 
 	return 0;
 }

@@ -8,16 +8,26 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS
-	roscpp std_msgs geometry_msgs shape_msgs sensor_msgs nav_msgs shape_msgs tf
-	pcl_conversions pcl_msgs
-	message_generation
+find_package(catkin
+	REQUIRED COMPONENTS
+		roscpp 
+		std_msgs
+		geometry_msgs
+		shape_msgs
+		sensor_msgs
+		nav_msgs
+		shape_msgs
+		tf
+		pcl_conversions
+		pcl_msgs
+		message_generation
 )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
 find_package(PCL REQUIRED)
+
 
 # ----------------------- LIBRARIES ---------------------------
 find_package(Boost COMPONENTS filesystem system REQUIRED)
@@ -83,7 +93,7 @@ find_package(Eigen3 REQUIRED)
 #)
 
 
-# # # # generate_messages(DEPENDENCIES std_msgs )
+# generate_messages(DEPENDENCIES std_msgs )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -144,16 +154,21 @@ catkin_package(
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 
+
 # ----------------------- INCLUDES ----------------------------
-include_directories(  ${EIGEN3_INCLUDE_DIR}
-                      ${GMPXX_INCLUDE_DIR}
-                      ${OpenCV_INCLUDE_DIRS} 
-                      ${CGAL_INCLUDE_DIRS}
-                      external/glm/glm/
-                      external/
-                      include/manifoldReconstructor/
-                      include/test/
-                      ) 
+include_directories(
+	${EIGEN3_INCLUDE_DIR}
+	${GMPXX_INCLUDE_DIR}
+	${OpenCV_INCLUDE_DIRS} 
+	${CGAL_INCLUDE_DIRS}
+	external/glm/glm/
+	external/
+	include/core/
+	include/core/utilities
+	include/ros_node/
+)
+
+
 # ----------------------- GCC FLAGS ----------------------------
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fpermissive")
 
@@ -171,21 +186,9 @@ endif()
 
 # ------------------------ BUILD -------------------------------
 file(GLOB_RECURSE meshRec_SOURCE 
-	src/*.cpp
-	test/*.cpp
+	src/core/*.cpp
+	src/ros_node/*.cpp
 )
-
-#	src/cam_parsers/*.cpp
-#	src/Delaunay3DCellInfo.cpp
-#	src/Delaunay3DVertexInfo.cpp
-#	src/ManifoldManager.cpp
-#	src/ManifoldMeshReconstructor.cpp
-#	src/OutputCreator.cpp
-#	src/utilities/*.cpp
-#	test/ReconstructFromSLAMData.cpp
-#	test/CameraPointsCollection.cpp
-#	test/Main.cpp
-#)
 
 add_executable(gamesh_node ${meshRec_SOURCE} )
 target_link_libraries(
@@ -211,7 +214,6 @@ target_link_libraries(
 ## either from message generation or dynamic reconfigure
 # add_dependencies(gamesh ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
-#TODO try this
 add_dependencies(gamesh_node gamesh_generate_message_cpp)
 
 ## Declare a C++ executable

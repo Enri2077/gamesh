@@ -1,23 +1,22 @@
 /*
- * ManifoldMeshReconstructor.h
+ * TriangulationManager.h
  *
  *  Created on: 24/giu/2015
  *      Author: andrea
  */
 
-#ifndef MANIFOLDMESHRECONSTRUCTOR_H_
-#define MANIFOLDMESHRECONSTRUCTOR_H_
+
+#ifndef TRIANGULATIONMANAGER_H_
+#define TRIANGULATIONMANAGER_H_
 
 #include <types_reconstructor.hpp>
 #include <types_config.hpp>
-#include <Logger.h>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
 #include <map>
 #include <set>
 #include <ManifoldManager.h>
-#include <OutputCreator.h>
 #include <fstream>
 #include <iostream>
 #include <Ray.hpp>
@@ -40,10 +39,10 @@
  *
  *
  */
-class ManifoldMeshReconstructor {
+class TriangulationManager {
 public:
-	ManifoldMeshReconstructor(ManifoldReconstructionConfig& conf);
-	virtual ~ManifoldMeshReconstructor();
+	TriangulationManager(ManifoldReconstructionConfig& conf);
+	virtual ~TriangulationManager();
 
 	void updateTriangulation();
 
@@ -109,6 +108,11 @@ private:
 	std::vector<CamReconstruction> cameras_;
 	std::vector<PointReconstruction> points_;
 
+	// Steiner vertices are not related to actual points, so their indices are negative numbers.
+	// When not initialised the index is -1, further indices are the following negative integers.
+	// The first assigned index is -2
+	long int nextSteinerPointId_ = -2;
+
 	std::map<std::pair<int, int>, RayPath*> rayPaths_;
 	std::map<int, std::set<RayPath*>> camerasRayPaths_;
 	std::map<int, std::set<RayPath*>> pointsRayPaths_;
@@ -135,8 +139,11 @@ private:
 
 	std::set<std::pair<int, int>> raysCandidateToBeRemoved_;
 
-	float l_, stepX_, stepY_, stepZ_;
+	// Steiner grid step on each axis
+	float stepX_, stepY_, stepZ_;
+	// Target Steiner grid bounds for each semi axis
 	float sgMinX_, sgMaxX_, sgMinY_, sgMaxY_, sgMinZ_, sgMaxZ_;
+	// Current Steiner grid bounds for each semi axis
 	float sgCurrentMinX_, sgCurrentMaxX_, sgCurrentMinY_, sgCurrentMaxY_, sgCurrentMinZ_, sgCurrentMaxZ_;
 
 	int iterationCounter_ = 0;
@@ -151,8 +158,7 @@ private:
 
 	ManifoldReconstructionConfig& conf_;
 	ManifoldManager* manifoldManager_;
-	OutputCreator* outputM_;
 	std::ofstream fileOut_;
 };
 
-#endif /* MANIFOLDMESHRECONSTRUCTOR_H_ */
+#endif /* TRIANGULATIONMANAGER_H_ */

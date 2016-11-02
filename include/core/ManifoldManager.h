@@ -4,7 +4,7 @@
 #include <iostream>
 #include <types_reconstructor.hpp>
 #include <types_config.hpp>
-#include <OutputCreator.h>
+//#include <OutputCreator.h>
 #include <OutputManager.h>
 #include <Chronometer.h>
 
@@ -78,13 +78,13 @@ private:
 
 	bool isBoundaryCell(Delaunay3::Cell_handle& c);
 	bool isBoundaryCell(Delaunay3::Cell_handle& c, std::vector<int>& neighNotManifold);
-	bool isFreespace(Delaunay3::Cell_handle& cell);
+	bool isFreespace(Delaunay3::Cell_handle& c);
 
 	Delaunay3& dt_;
 	std::map<index3, std::set<Delaunay3::Cell_handle>> boundaryCellsSpatialMap_;
 
 	ManifoldReconstructionConfig& conf_;
-	OutputCreator* outputM_;
+//	OutputCreator* outputM_;
 	OutputManager* out_ = NULL;
 
 //	std::ofstream fileOut_;

@@ -8,13 +8,12 @@
 #ifndef RECONSTRUCTFROMSFMDATA_H_
 #define RECONSTRUCTFROMSFMDATA_H_
 
+#include <core/TriangulationManager.h>
 #include <types_config.hpp>
-#include <ManifoldMeshReconstructor.h>
 #include <OutputManager.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
-//#include <SfMData.h>
-//#include <CameraPointsCollection.h>
+#include <Chronometer.h>
 
 class ReconstructFromSLAMData {
 public:
@@ -43,8 +42,7 @@ private:
 
 	ManifoldReconstructionConfig& config_;
 
-	ManifoldMeshReconstructor* manifRec_;
-	utilities::Logger logger_;
+	TriangulationManager* manifRec_;
 
 //	std::set<CameraType*> rayTracingSet_;
 

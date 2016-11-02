@@ -52,6 +52,7 @@ typedef struct {
 	bool debugOutput;
 	bool publishReceivedPointcloud;
 	bool publishUsedPointcloud;
+	bool checkIntegrityWhenFinished;
 
 	std::string inputTopic;
 	std::string outputTopic;
@@ -91,7 +92,11 @@ typedef struct {
 		out << "saveMeshEvery: " << saveMeshEvery << std::endl;
 
 		out << "fakePointsMultiplier: " << fakePointsMultiplier << std::endl;
+		out << "timeStatsOutput: " << timeStatsOutput << std::endl;
 		out << "debugOutput: " << debugOutput << std::endl;
+		out << "publishReceivedPointcloud: " << publishReceivedPointcloud << std::endl;
+		out << "publishUsedPointcloud: " << publishUsedPointcloud << std::endl;
+		out << "checkIntegrityWhenFinished: " << checkIntegrityWhenFinished << std::endl;
 
 		out << "outputFolder: " << outputFolder << std::endl;
 		out << "outputFolder: " << timeStatsFolder << std::endl;

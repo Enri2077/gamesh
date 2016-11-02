@@ -30,6 +30,7 @@ gamesh:
   debug_output: false
   publish_received_pointcloud: true
   publish_used_pointcloud: true
+  check_integrity_when_finished: true
   
   input_topic: "gamesh_rays"
   output_topic: "gamesh_mesh"
