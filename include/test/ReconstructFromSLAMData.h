@@ -24,11 +24,13 @@ public:
 	void addCamera(CameraType* newCamera);
 	void update();
 	void saveMesh(std::string namePrefix, std::string nameSuffix);
+	bool integrityCheck();
 
 	void overwriteFocalY(float f);
 
 	void setExpectedTotalIterationsNumber(int n);
 	void insertStatValue(float v);
+
 
 	OutputManager* getOutputManager() {
 		return manifRec_->getOutputManager();

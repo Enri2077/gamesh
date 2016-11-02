@@ -1,22 +1,14 @@
 #ifndef MANIFOLDMANAGER_H_
 #define MANIFOLDMANAGER_H_
 
-//#include <Mesh.h>
-//#include <tuple>
-//#include <fstream>
 #include <iostream>
 #include <types_reconstructor.hpp>
 #include <types_config.hpp>
 #include <OutputCreator.h>
 #include <OutputManager.h>
-//#include <Logger.h>
 #include <Chronometer.h>
-/**
- * This class provides the basic tools to manage the actual manifold creation,
- * such as the region growing procedure, the manifoldness tests and the update of the
- * tetrahedra-based boundary
- *
- * */
+
+
 class ManifoldManager {
 public:
 	ManifoldManager(Delaunay3& dt, ManifoldReconstructionConfig& conf);
@@ -31,20 +23,20 @@ public:
 		return bSize;
 	}
 
-	void shrinkManifold3(const std::set<index3>& enclosingVolumeMapIndices, const float& maxPointToPointDistance,
-			const long currentEnclosingVersion);
+	void shrinkManifold(const std::set<index3>& enclosingVolumeMapIndices, const long currentEnclosingVersion);
 
-	void shrinkSeveralAtOnce3(const std::set<index3>& enclosingVolumeMapIndices, const float& maxPointToPointDistance,
-			const long currentEnclosingVersion);
+	void shrinkSeveralAtOnce(const std::set<index3>& enclosingVolumeMapIndices, long currentEnclosingVersion);
 
-	void regionGrowingBatch3(Delaunay3::Cell_handle& startingCell, const std::set<index3>& enclosingVolumeMapIndices);
+	void initAndGrowManifold(Delaunay3::Cell_handle& startingCell, const std::set<index3>& enclosingVolumeMapIndices);
 
-	void regionGrowing3(const std::set<index3>& enclosingVolumeMapIndices);
+	void growManifold(const std::set<index3>& enclosingVolumeMapIndices);
 
-	void growSeveralAtOnce3(const std::set<index3>& enclosingVolumeMapIndices);
+	void growSeveralAtOnce(const std::set<index3>& enclosingVolumeMapIndices);
 
-	const std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> getBoundaryCells() const {
-		std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> boundaryCells;
+	bool checkBoundaryIntegrity();
+
+	const std::set<Delaunay3::Cell_handle> getBoundaryCells() const {
+		std::set<Delaunay3::Cell_handle> boundaryCells;
 
 		for (auto i_lbc : boundaryCellsSpatialMap_) {
 			boundaryCells.insert(i_lbc.second.begin(), i_lbc.second.end());
@@ -52,12 +44,6 @@ public:
 
 		return boundaryCells;
 	}
-
-//	const std::map<index3, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess>>& getBoundaryCellsSpatialMap() const {
-//		return boundaryCellsSpatialMap_;
-//	}
-
-	bool checkBoundaryIntegrity();
 
 	OutputManager* getOutputManager() {
 		return out_;
@@ -70,14 +56,12 @@ private:
 	bool isInEnclosingVolume(Delaunay3::Cell_handle& c, const std::set<index3>& enclosingVolumeMapIndices,
 			const long& currentEnclosingVersion, Chronometer& chronoEnclosingCache, Chronometer& chronoEnclosingCheck);
 
-	void regionGrowingProcedure3(const std::set<index3>& enclosingVolumeMapIndices);
-
 	/******************************************************/
 	/**************Manifold check functions****************/
 	/******************************************************/
-	bool singleTetTest2(Delaunay3::Cell_handle& i);
-	bool addSeveralAndCheckManifoldness2(Delaunay3::Vertex_handle curV);
-	bool subSeveralAndCheckManifoldness2(Delaunay3::Cell_handle& cellToTest1, int idxNeigh);
+	bool singleCellTest(Delaunay3::Cell_handle& i);
+	bool addSeveralAndCheckManifoldness(Delaunay3::Vertex_handle v);
+	bool subSeveralAndCheckManifoldness(Delaunay3::Vertex_handle v);
 	bool isRegular(Delaunay3::Vertex_handle& v);
 	bool isRegular2(Delaunay3::Vertex_handle& v);
 	bool isRegularProfiled(Delaunay3::Vertex_handle& v);
@@ -85,9 +69,8 @@ private:
 	/******************************************************/
 	/************Boundary update functions*****************/
 	/******************************************************/
-
-	void addTetAndUpdateBoundary2(Delaunay3::Cell_handle& cell);
-	void subTetAndUpdateBoundary2(Delaunay3::Cell_handle& currentTet,
+	void addCellAndUpdateBoundary(Delaunay3::Cell_handle& cell);
+	void subCellAndUpdateBoundary(Delaunay3::Cell_handle& currentTet,
 			std::vector<Delaunay3::Cell_handle>& newBoundaryTets);
 
 	bool insertInBoundary(Delaunay3::Cell_handle& cellToTest);
@@ -98,7 +81,7 @@ private:
 	bool isFreespace(Delaunay3::Cell_handle& cell);
 
 	Delaunay3& dt_;
-	std::map<index3, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess>> boundaryCellsSpatialMap_;
+	std::map<index3, std::set<Delaunay3::Cell_handle>> boundaryCellsSpatialMap_;
 
 	ManifoldReconstructionConfig& conf_;
 	OutputCreator* outputM_;

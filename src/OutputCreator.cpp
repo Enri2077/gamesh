@@ -784,7 +784,7 @@ void OutputCreator::writeTetrahedraToOFF(std::string pathPrefix, std::vector<int
 	outputFile.close();
 }
 
-void OutputCreator::writeTetrahedraToOFF(std::string pathPrefix, std::vector<int> ids, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> & cells) {
+void OutputCreator::writeTetrahedraToOFF(std::string pathPrefix, std::vector<int> ids, std::set<Delaunay3::Cell_handle> & cells) {
 	// Refuse to create a file with without tetrahedra
 	std::ostringstream outputFileName;
 	outputFileName << pathPrefix;

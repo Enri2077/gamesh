@@ -19,7 +19,7 @@ class OutputManager {
 public:
 
 	OutputManager(
-			std::map<index3, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess>>& boundaryCellsSpatialMap, ManifoldReconstructionConfig conf);
+			std::map<index3, std::set<Delaunay3::Cell_handle>>& boundaryCellsSpatialMap, ManifoldReconstructionConfig conf);
 	virtual ~OutputManager();
 
 
@@ -36,7 +36,7 @@ private:
 	std::array<Delaunay3::Vertex_handle, 3> faceIndexToVertices(Delaunay3::Cell_handle c, int faceIndex);
 
 	ManifoldReconstructionConfig& conf_;
-	std::map<index3, std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess>>& boundaryCellsSpatialMap_;
+	std::map<index3, std::set<Delaunay3::Cell_handle>>& boundaryCellsSpatialMap_;
 	std::vector<PointReconstruction>* points_ = NULL;
 };
 

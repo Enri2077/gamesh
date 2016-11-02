@@ -60,6 +60,8 @@ public:
 	void saveManifold(const std::string filename);
 	void saveBoundary(int i, int j);
 
+	bool integrityCheck();
+
 	OutputManager* getOutputManager(){
 		return manifoldManager_->getOutputManager();
 	}

@@ -220,6 +220,10 @@ void ReconstructFromSLAMData::saveMesh(std::string namePrefix,
 
 }
 
+bool ReconstructFromSLAMData::integrityCheck(){
+	return manifRec_->integrityCheck();
+}
+
 void ReconstructFromSLAMData::insertStatValue(float v) {
 	manifRec_->timeStatsFile_ << v << ", ";
 }

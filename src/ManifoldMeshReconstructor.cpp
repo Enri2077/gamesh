@@ -28,7 +28,7 @@ ManifoldMeshReconstructor::ManifoldMeshReconstructor(ManifoldReconstructionConfi
 	manifoldManager_->getOutputManager()->setPoints(&points_);
 
 	stepX_ = stepY_ = stepZ_ = conf_.steinerGridStepLength;
-	l_ = sqrt(stepX_ * stepX_ + stepY_ * stepY_ + stepZ_ * stepZ_);
+//	l_ = sqrt(stepX_ * stepX_ + stepY_ * stepY_ + stepZ_ * stepZ_);
 
 	sgMinX_ = sgMinY_ = sgMinZ_ = sgMaxX_ = sgMaxY_ = sgMaxZ_ = 0.0;
 
@@ -205,7 +205,7 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 	// This is used to cache the enclosing information in the cells, incrementing it invalidates the cached values and needs to be done when the points on which the enclosing volume is base are changed
 	currentEnclosingVersion_++;
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	/*
 	 *  Shrinking
@@ -228,7 +228,7 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 	}
 	timeStatsFile_ << timerShrinkTime_ << ", " << timerShrinkSeveralTime_ << ", ";
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	/*
 	 *  Vertex removing
@@ -261,10 +261,10 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 		verticesToBeRemoved_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput) cout << "Remove vertices\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Remove vertices\t\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput) cout << "Remove vertices\t\t\tSkipped" << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Remove vertices\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 	cout << "ManifoldMeshReconstructor::rayTracingFromAllCam:\t\t vertices removed:\t " << verticesRemovedCount << endl;
@@ -284,10 +284,10 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 		pointsToBeRemovedId_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput) cout << "Remove points\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Remove points\t\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput) cout << "Remove points\t\t\tSkipped" << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Remove points\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 	cout << "ManifoldMeshReconstructor::rayTracingFromAllCam:\t\t points removed:\t " << pointsRemovedCount << endl;
@@ -335,10 +335,10 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 		updatedCamerasId_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput) cout << "Add new vertices\t\t" << chronoEverything.getSeconds() << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Add new vertices\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput) cout << "Add new vertices\t\tSkipped" << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Add new vertices\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 
@@ -365,10 +365,10 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 		movedPointsId_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput) cout << "Move vertices\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Move vertices\t\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput) cout << "Move vertices\t\t\tSkipped" << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Move vertices\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 
@@ -389,10 +389,10 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 		movedCamerasId_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput) cout << "Move Cameras\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Move Cameras\t\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput) cout << "Move Cameras\t\t\tSkipped" << endl << endl;
+		if (conf_.timeStatsOutput) cout << "Move Cameras\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 
@@ -404,7 +404,7 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 
 	rayTracingFromAllCam();
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	/*
 	 *  Grow
@@ -412,7 +412,7 @@ void ManifoldMeshReconstructor::updateTriangulation() {
 
 	growManifold(enclosingVolumeMapIndices);
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	timeStatsFile_ << manifoldManager_->chronoInsertInBoundary_.getSeconds() << ", ";
 	timeStatsFile_ << manifoldManager_->chronoRemoveFromBoundary_.getSeconds() << ", ";
@@ -619,10 +619,10 @@ void ManifoldMeshReconstructor::rayTracingFromAllCam() {
 		raysToBeTraced_.clear();
 
 		chronoEverything.stop();
-		if (conf_.timeStatsOutput) cout << "rayTracing\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+		if (conf_.timeStatsOutput) cout << "rayTracing\t\t" << chronoEverything.getSeconds() << endl << endl;
 		timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 	} else {
-		if (conf_.timeStatsOutput) cout << "rayTracing\t\t\tSkipped" << endl << endl;
+		if (conf_.timeStatsOutput) cout << "rayTracing\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
 
@@ -922,61 +922,61 @@ void ManifoldMeshReconstructor::shrinkManifold(const std::set<index3>& enclosing
 	chronoEverything.reset();
 	chronoEverything.start();
 
-	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+	manifoldManager_->shrinkManifold(enclosingVolumeMapIndices, currentEnclosingVersion_);
 
 	chronoEverything.stop();
-	if (conf_.timeStatsOutput) cout << "\tshrink\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+	if (conf_.timeStatsOutput) cout << "\tshrink\t\t" << chronoEverything.getSeconds() << endl << endl;
 	timerShrinkTime_ += chronoEverything.getSeconds();
 
 	if (conf_.debugOutput) saveBoundary(0, 1);
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.reset();
 	chronoEverything.start();
 
-	manifoldManager_->shrinkSeveralAtOnce3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+	manifoldManager_->shrinkSeveralAtOnce(enclosingVolumeMapIndices, currentEnclosingVersion_);
 
 	chronoEverything.stop();
-	if (conf_.timeStatsOutput) cout << "\tshrinkSeveral\t\t" << chronoEverything.getSeconds() << endl << endl;
+	if (conf_.timeStatsOutput) cout << "\tshrinkSeveral\t" << chronoEverything.getSeconds() << endl << endl;
 	timerShrinkSeveralTime_ += chronoEverything.getSeconds();
 
 	if (conf_.debugOutput) saveBoundary(0, 2);
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.reset();
 	chronoEverything.start();
 
-	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+	manifoldManager_->shrinkManifold(enclosingVolumeMapIndices, currentEnclosingVersion_);
 
 	chronoEverything.stop();
-	if (conf_.timeStatsOutput) cout << "\tshrink\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+	if (conf_.timeStatsOutput) cout << "\tshrink\t\t" << chronoEverything.getSeconds() << endl << endl;
 	timerShrinkTime_ += chronoEverything.getSeconds();
 
 	if (conf_.debugOutput) saveBoundary(0, 3);
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.reset();
 	chronoEverything.start();
 
-	manifoldManager_->shrinkSeveralAtOnce3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+	manifoldManager_->shrinkSeveralAtOnce(enclosingVolumeMapIndices, currentEnclosingVersion_);
 
-	if (conf_.timeStatsOutput) cout << "\tshrinkSeveral\t\t" << chronoEverything.getSeconds() << endl << endl;
+	if (conf_.timeStatsOutput) cout << "\tshrinkSeveral\t" << chronoEverything.getSeconds() << endl << endl;
 	timerShrinkSeveralTime_ += chronoEverything.getSeconds();
 
 	if (conf_.debugOutput) saveBoundary(0, 4);
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.reset();
 	chronoEverything.start();
 
-	manifoldManager_->shrinkManifold3(enclosingVolumeMapIndices, l_, currentEnclosingVersion_);
+	manifoldManager_->shrinkManifold(enclosingVolumeMapIndices, currentEnclosingVersion_);
 
 	chronoEverything.stop();
-	if (conf_.timeStatsOutput) cout << "\tshrink\t\t\t" << chronoEverything.getSeconds() << endl << endl;
+	if (conf_.timeStatsOutput) cout << "\tshrink\t\t" << chronoEverything.getSeconds() << endl << endl;
 	timerShrinkTime_ += chronoEverything.getSeconds();
 
 	if (conf_.debugOutput) saveBoundary(0, 5);
@@ -993,7 +993,7 @@ void ManifoldMeshReconstructor::growManifold(const std::set<index3>& enclosingVo
 	if (manifoldManager_->getBoundarySize() == 0) {
 		double max = 0.0;
 		Delaunay3::Cell_handle startingCell;
-		cout << "ManifoldMeshReconstructor::growManifold: \t\t boundary is still empty, growing from the cell with highest vote" << endl;
+		cout << "ManifoldMeshReconstructor::growManifold: \t\t boundary is empty, growing from the cell with highest vote" << endl;
 		// If the boundary is still empty, start growing from the cell with highest vote
 		//TODO from every cell conaining cameras; otherwise disconnected spaces wouldn't all be grown
 		for (Delaunay3::Finite_cells_iterator itCell = dt_.finite_cells_begin(); itCell != dt_.finite_cells_end();
@@ -1005,12 +1005,12 @@ void ManifoldMeshReconstructor::growManifold(const std::set<index3>& enclosingVo
 			}
 		}
 
-		manifoldManager_->regionGrowingBatch3(startingCell, enclosingVolumeMapIndices);
+		manifoldManager_->initAndGrowManifold(startingCell, enclosingVolumeMapIndices);
 	} else {
-		manifoldManager_->regionGrowing3(enclosingVolumeMapIndices);
+		manifoldManager_->growManifold(enclosingVolumeMapIndices);
 	}
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.stop();
 	if (conf_.timeStatsOutput) cout << "growManifold\t\t" << chronoEverything.getSeconds() << endl << endl;
@@ -1018,22 +1018,22 @@ void ManifoldMeshReconstructor::growManifold(const std::set<index3>& enclosingVo
 
 	if (conf_.debugOutput) saveBoundary(1, 1);
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.reset();
 	chronoEverything.start();
-	manifoldManager_->growSeveralAtOnce3(enclosingVolumeMapIndices);
+	manifoldManager_->growSeveralAtOnce(enclosingVolumeMapIndices);
 	chronoEverything.stop();
 	if (conf_.timeStatsOutput) cout << "growManifoldSev\t\t" << chronoEverything.getSeconds() << endl << endl;
 	timeStatsFile_ << chronoEverything.getSeconds() << ", ";
 
 	if (conf_.debugOutput) saveBoundary(1, 2);
 
-	manifoldManager_->checkBoundaryIntegrity();
+	if (conf_.debugOutput) manifoldManager_->checkBoundaryIntegrity();
 
 	chronoEverything.reset();
 	chronoEverything.start();
-	manifoldManager_->regionGrowing3(enclosingVolumeMapIndices);
+	manifoldManager_->growManifold(enclosingVolumeMapIndices);
 	chronoEverything.stop();
 	if (conf_.timeStatsOutput) cout << "growManifold\t\t" << chronoEverything.getSeconds() << endl << endl;
 	timeStatsFile_ << chronoEverything.getSeconds() << ", ";
@@ -1060,9 +1060,13 @@ void ManifoldMeshReconstructor::saveManifold(const std::string filename) {
 }
 
 void ManifoldMeshReconstructor::saveBoundary(int i, int j) {
-	std::set<Delaunay3::Cell_handle, sortTetByIntersectionAndDefaultLess> b = manifoldManager_->getBoundaryCells();
+	std::set<Delaunay3::Cell_handle> b = manifoldManager_->getBoundaryCells();
 	if (b.size()) outputM_->writeTetrahedraToOFF("output/boundary/boundary",
 			std::vector<int> { iterationCounter_, i, j }, b);
+}
+
+bool ManifoldMeshReconstructor::integrityCheck(){
+	return manifoldManager_->checkBoundaryIntegrity();
 }
 
 void ManifoldMeshReconstructor::initSteinerPointGridAndBound() {

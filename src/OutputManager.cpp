@@ -15,10 +15,7 @@
 #include <gamesh_bridge/GameshMesh.h>
 #include <std_msgs/ColorRGBA.h>
 
-OutputManager::OutputManager(
-		std::map<index3,
-				std::set<Delaunay3::Cell_handle,
-						sortTetByIntersectionAndDefaultLess>>& boundaryCellsSpatialMap,
+OutputManager::OutputManager(std::map<index3, std::set<Delaunay3::Cell_handle>>& boundaryCellsSpatialMap,
 		ManifoldReconstructionConfig conf) :
 		boundaryCellsSpatialMap_(boundaryCellsSpatialMap), conf_(conf) {
 
@@ -34,9 +31,9 @@ void OutputManager::publishROSMesh(ros::Publisher& meshPublisher) {
 	std::map<Delaunay3::Vertex_handle, int> vertexHandleToIndex;
 
 	int facetToTriangleMatrix[4][3] = { { 3, 2, 1 },	// facetIndex : 0
-			{ 0, 2, 3 },	// facetIndex : 1
-			{ 3, 1, 0 },	// facetIndex : 2
-			{ 0, 1, 2 } 	// facetIndex : 3
+	{ 0, 2, 3 },	// facetIndex : 1
+	{ 3, 1, 0 },	// facetIndex : 2
+	{ 0, 1, 2 } 	// facetIndex : 3
 	};
 
 	// Populate the list of points, the list of vertex handles, and
@@ -50,8 +47,7 @@ void OutputManager::publishROSMesh(ros::Publisher& meshPublisher) {
 				// If the face is a boundary face (between the boundary cell and a non manifold cell)
 				if (!c->neighbor(faceIndex)->info().getManifoldFlag()) {
 
-					std::array<Delaunay3::Vertex_handle, 3> triangleVertices =
-							faceIndexToVertices(c, faceIndex);
+					std::array<Delaunay3::Vertex_handle, 3> triangleVertices = faceIndexToVertices(c, faceIndex);
 
 					// Add the face's vertices to the vertices list (if they aren't already in it)
 					for (auto v : triangleVertices) {
@@ -70,12 +66,9 @@ void OutputManager::publishROSMesh(ros::Publisher& meshPublisher) {
 
 					// Add the face's triangle to the triangles list
 					shape_msgs::MeshTriangle t;
-					t.vertex_indices[0] =
-							vertexHandleToIndex[triangleVertices[0]];
-					t.vertex_indices[1] =
-							vertexHandleToIndex[triangleVertices[1]];
-					t.vertex_indices[2] =
-							vertexHandleToIndex[triangleVertices[2]];
+					t.vertex_indices[0] = vertexHandleToIndex[triangleVertices[0]];
+					t.vertex_indices[1] = vertexHandleToIndex[triangleVertices[1]];
+					t.vertex_indices[2] = vertexHandleToIndex[triangleVertices[2]];
 
 					m.triangles.push_back(t);
 
@@ -95,9 +88,9 @@ void OutputManager::publishROSColoredMesh(ros::Publisher& meshPublisher) {
 	std::map<Delaunay3::Vertex_handle, int> vertexHandleToIndex;
 
 	int facetToTriangleMatrix[4][3] = { { 3, 2, 1 },	// facetIndex : 0
-			{ 0, 2, 3 },	// facetIndex : 1
-			{ 3, 1, 0 },	// facetIndex : 2
-			{ 0, 1, 2 } 	// facetIndex : 3
+	{ 0, 2, 3 },	// facetIndex : 1
+	{ 3, 1, 0 },	// facetIndex : 2
+	{ 0, 1, 2 } 	// facetIndex : 3
 	};
 
 	// Populate the list of points, the list of vertex handles, and
@@ -106,15 +99,12 @@ void OutputManager::publishROSColoredMesh(ros::Publisher& meshPublisher) {
 
 		for (auto c : i_lbc.second) { // For each boundary cell in the container
 
-			if(!c->info().getManifoldFlag()) continue; //TODO This is a problem visible also in the grow procedure. Some boundary cells are not in the manifold set
-
 			for (int faceIndex = 0; faceIndex < 4; faceIndex++) { // For each face in the cell
 
 				// If the face is a boundary face (between the boundary cell and a non manifold cell)
 				if (!c->neighbor(faceIndex)->info().getManifoldFlag()) {
 
-					std::array<Delaunay3::Vertex_handle, 3> triangleVertices =
-							faceIndexToVertices(c, faceIndex);
+					std::array<Delaunay3::Vertex_handle, 3> triangleVertices = faceIndexToVertices(c, faceIndex);
 
 					// Add the face's vertices to the vertices list (if they aren't already in it)
 					for (auto v : triangleVertices) {
@@ -130,11 +120,10 @@ void OutputManager::publishROSColoredMesh(ros::Publisher& meshPublisher) {
 							vertexHandleToIndex[v] = m.vertices.size() - 1;
 
 							std_msgs::ColorRGBA color;
-							int pointId = v->info().getPointId();//TODO type
+							int pointId = v->info().getPointId(); //TODO type
 
 							if (pointId >= 0) {
-								PointReconstruction& point = points_->at(
-										pointId);
+								PointReconstruction& point = points_->at(pointId);
 								color.r = point.r;
 								color.g = point.g;
 								color.b = point.b;
@@ -153,12 +142,9 @@ void OutputManager::publishROSColoredMesh(ros::Publisher& meshPublisher) {
 
 					// Add the face's triangle to the triangles list
 					shape_msgs::MeshTriangle t;
-					t.vertex_indices[0] =
-							vertexHandleToIndex[triangleVertices[0]];
-					t.vertex_indices[1] =
-							vertexHandleToIndex[triangleVertices[1]];
-					t.vertex_indices[2] =
-							vertexHandleToIndex[triangleVertices[2]];
+					t.vertex_indices[0] = vertexHandleToIndex[triangleVertices[0]];
+					t.vertex_indices[1] = vertexHandleToIndex[triangleVertices[1]];
+					t.vertex_indices[2] = vertexHandleToIndex[triangleVertices[2]];
 
 					m.triangles.push_back(t);
 
@@ -182,9 +168,9 @@ void OutputManager::writeMeshToOff(const std::string filename) {
 	std::vector<Delaunay3::Vertex_handle> vertexHandles;
 
 	int facetToTriangleMatrix[4][3] = { { 3, 2, 1 },	// facetIndex : 0
-			{ 0, 2, 3 },	// facetIndex : 1
-			{ 3, 1, 0 },	// facetIndex : 2
-			{ 0, 1, 2 } 	// facetIndex : 3
+	{ 0, 2, 3 },	// facetIndex : 1
+	{ 3, 1, 0 },	// facetIndex : 2
+	{ 0, 1, 2 } 	// facetIndex : 3
 	};
 
 	outfile.open(filename.c_str());
@@ -193,18 +179,16 @@ void OutputManager::writeMeshToOff(const std::string filename) {
 		return;
 	}
 
-	std::cout << "boundaryCellsSpatialMap size\t\t "
-			<< boundaryCellsSpatialMap_.size() << std::endl;
+	std::cout << "boundaryCellsSpatialMap size\t\t " << boundaryCellsSpatialMap_.size() << std::endl;
 
 	std::set<Delaunay3::Cell_handle> boundaryCells;
 
 	for (auto i_lbc : boundaryCellsSpatialMap_) { // For each spatially mapped container
 
-			for (auto c : i_lbc.second) { // For each boundary cell in the container
-				boundaryCells.insert(c);
-			}
+		for (auto c : i_lbc.second) { // For each boundary cell in the container
+			boundaryCells.insert(c);
+		}
 	}
-
 
 	// Populate the list of points, the list of vertex handles, and
 	// the associative maps from vertex handle to vertex index).
@@ -213,47 +197,38 @@ void OutputManager::writeMeshToOff(const std::string filename) {
 //		for (auto c : i_lbc.second) { // For each boundary cell in the container
 
 	for (auto c : boundaryCells) {
-			for (int faceIndex = 0; faceIndex < 4; faceIndex++) { // For each face in the cell
+		for (int faceIndex = 0; faceIndex < 4; faceIndex++) { // For each face in the cell
 
-				// If the face is a boundary face (between the boundary cell and a non manifold cell)
-				if (!c->neighbor(faceIndex)->info().getManifoldFlag()) {
+			// If the face is a boundary face (between the boundary cell and a non manifold cell)
+			if (!c->neighbor(faceIndex)->info().getManifoldFlag()) {
 
-					std::array<Delaunay3::Vertex_handle, 3> triangleVertices =
-							faceIndexToVertices(c, faceIndex);
+				std::array<Delaunay3::Vertex_handle, 3> triangleVertices = faceIndexToVertices(c, faceIndex);
 
-//					bool containsSteinerPoint = false;
-//					for(auto v : triangleVertices) if(v->info().getPointId() == -1) containsSteinerPoint = true;
-//					if(containsSteinerPoint) continue;
-
-					// Add the face's vertices to the vertices list (if they aren't already in it)
-					for (auto v : triangleVertices) {
-						if (!vertexHandleToIndex.count(v)) {
-							points.push_back(v->point());
-							vertexHandles.push_back(v);
-							vertexHandleToIndex[v] = points.size() - 1;
-						}
+				// Add the face's vertices to the vertices list (if they aren't already in it)
+				for (auto v : triangleVertices) {
+					if (!vertexHandleToIndex.count(v)) {
+						points.push_back(v->point());
+						vertexHandles.push_back(v);
+						vertexHandleToIndex[v] = points.size() - 1;
 					}
-
-					// Add the face's triangle to the triangles list
-					triangles.insert(
-							index3(vertexHandleToIndex[triangleVertices[0]],
-									vertexHandleToIndex[triangleVertices[1]],
-									vertexHandleToIndex[triangleVertices[2]]));
-
 				}
+
+				// Add the face's triangle to the triangles list
+				triangles.insert(
+						index3(vertexHandleToIndex[triangleVertices[0]], vertexHandleToIndex[triangleVertices[1]],
+								vertexHandleToIndex[triangleVertices[2]]));
+
 			}
 		}
-//	}
+	}
 
 	chrono1.stop();
 	chrono2.start();
 
-	outfile << "OFF" << std::endl << points.size() << " " << triangles.size()
-			<< " 0" << std::endl;
+	outfile << "OFF" << std::endl << points.size() << " " << triangles.size() << " 0" << std::endl;
 
 	for (auto p : points)
-		outfile << static_cast<float>(p.x()) << " " << static_cast<float>(p.y())
-				<< " " << static_cast<float>(p.z()) << " " << std::endl;
+		outfile << static_cast<float>(p.x()) << " " << static_cast<float>(p.y()) << " " << static_cast<float>(p.z()) << " " << std::endl;
 
 	for (auto t : triangles)
 		outfile << "3 " << t.i << " " << t.j << " " << t.k << std::endl;
@@ -261,24 +236,20 @@ void OutputManager::writeMeshToOff(const std::string filename) {
 	outfile.close();
 
 	chrono2.stop();
-	std::cout << "writeMeshToOff collect:\t\t" << chrono1.getSeconds() << " s"
-			<< std::endl;
-	std::cout << "writeMeshToOff write  :\t\t" << chrono2.getSeconds() << " s"
-			<< std::endl;
-
-	std::cout << "writeMeshToOff vertices :\t\t" << points.size() << std::endl;
-	std::cout << "writeMeshToOff triangles:\t\t" << triangles.size() << std::endl;
+	std::cout << "writeMeshToOff collect  :\t\t" << chrono1.getSeconds() << " s" << std::endl;
+	std::cout << "writeMeshToOff write    :\t\t" << chrono2.getSeconds() << " s" << std::endl;
+	std::cout << "writeMeshToOff vertices :\t" << points.size() << std::endl;
+	std::cout << "writeMeshToOff triangles:\t" << triangles.size() << std::endl;
 
 }
 
-std::array<Delaunay3::Vertex_handle, 3> OutputManager::faceIndexToVertices(
-		Delaunay3::Cell_handle c, int faceIndex) {
+std::array<Delaunay3::Vertex_handle, 3> OutputManager::faceIndexToVertices(Delaunay3::Cell_handle c, int faceIndex) {
 	std::array<Delaunay3::Vertex_handle, 3> vertices;
 
 	int faceToTriangleMatrix[4][3] = { { 3, 2, 1 },	// facetIndex : 0
-			{ 0, 2, 3 },	// faceIndex : 1
-			{ 3, 1, 0 },	// faceIndex : 2
-			{ 0, 1, 2 } 	// faceIndex : 3
+	{ 0, 2, 3 },	// faceIndex : 1
+	{ 3, 1, 0 },	// faceIndex : 2
+	{ 0, 1, 2 } 	// faceIndex : 3
 	};
 
 	for (int i = 0; i < 3; i++)

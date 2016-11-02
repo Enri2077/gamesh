@@ -104,11 +104,13 @@ void raysCallback(const gamesh_bridge::GameshRays::ConstPtr& msg) {
 
 		point->position = glm::vec3(pclPoint.x, pclPoint.y, pclPoint.z);
 
+		float minColor = 0.1, maxColor = 0.9;
+
 		if (config_.generateColoredMesh) {
-			point->r = pclPoint.r / 255.0;
-			point->g = pclPoint.g / 255.0;
-			point->b = pclPoint.b / 255.0;
-			point->a = pclPoint.a / 255.0;
+			point->r = minColor+(maxColor-minColor)*(pclPoint.r / 255.0);
+			point->g = minColor+(maxColor-minColor)*(pclPoint.g / 255.0);
+			point->b = minColor+(maxColor-minColor)*(pclPoint.b / 255.0);
+			point->a = minColor+(maxColor-minColor)*(pclPoint.a / 255.0);
 		} else {
 			point->r = 0.5;
 			point->g = 0.5;
@@ -215,7 +217,6 @@ int main(int argc, char **argv) {
 	globalPointCloudPublisher = n.advertise<pcl::PCLPointCloud2>(config_.usedPointcloudTopic, 1);
 	globalBridgePointCloudPublisher = n.advertise<sensor_msgs::PointCloud2>(config_.receivedPointcloudTopic, 1);
 
-//	numPointsPerCamera_ = confManif_.maxPointsPerCamera;
 	std::cout << "max_iterations set to: " << maxIterations_ << std::endl;
 	std::cout << config_.toString() << std::endl;
 
@@ -249,8 +250,7 @@ int main(int argc, char **argv) {
 			m.update();
 
 			if (config_.enableMeshSaving && ros::ok() && m.iterationCount && !(m.iterationCount % config_.saveMeshEvery)) {
-//				m.saveMesh(config_.outputFolder, "current");
-				m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/current_from_OutputManager.off");
+				m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/current.off"); //TODO config
 			}
 
 			if (config_.enableMeshPublishing) {
@@ -272,14 +272,10 @@ int main(int argc, char **argv) {
 
 	}
 
-//	if (config_.enableMeshSaving && m.iterationCount){
-//		m.saveMesh(config_.outputFolder, "final");
-//		m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/final_from_OutputManager.off");
-//	}
-//	if(config_.enableMeshPublishing){
-//		if(config_.generateColoredMesh) m.getOutputManager()->publishROSColoredMesh(meshPublisher);
-//		else m.getOutputManager()->publishROSMesh(meshPublisher);
-//	}
+	if (config_.enableMeshSaving && m.iterationCount){
+		m.getOutputManager()->writeMeshToOff("/home/enrico/gamesh_output/final.off");
+	}
+	m.integrityCheck();
 
 	log.endEventAndPrint("main\t\t\t\t\t\t", true);
 
