@@ -6,6 +6,7 @@
  */
 
 #include <Delaunay3DCellInfo.h>
+#include <iostream>
 
 Delaunay3DCellInfo::Delaunay3DCellInfo() {
 }
@@ -205,4 +206,17 @@ bool Delaunay3DCellInfo::isNotKeptByFreeVote(const float threshold = 1.0) const 
 }
 
 
+void Delaunay3DCellInfo::lock(){
+	if(!locked_) locked_ = true;
+	else std::cerr << "Delaunay3DCellInfo::lock: \t\t trying to lock but already locked" << std::endl;
+}
+
+void Delaunay3DCellInfo::unlock(){
+	if(locked_) locked_ = false;
+	else std::cerr << "Delaunay3DCellInfo::lock: \t\t trying to unlock but already unlocked" << std::endl;
+}
+
+bool Delaunay3DCellInfo::isLocked() const {
+	return locked_;
+}
 

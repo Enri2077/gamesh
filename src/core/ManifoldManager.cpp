@@ -6,13 +6,13 @@
  */
 
 #include <ManifoldManager.h>
-//#include <OutputCreator.h>
 #include <OutputManager.h>
 #include <utilities.hpp>
 #include <sstream>
 #include <iostream>
 #include <unordered_set>
 #include <unordered_map>
+#include <omp.h>
 
 using std::cout;
 using std::cerr;
@@ -21,9 +21,7 @@ using std::endl;
 ManifoldManager::ManifoldManager(Delaunay3& dt, ManifoldReconstructionConfig& conf) :
 		dt_(dt), conf_(conf) {
 
-//	outputM_ = new OutputCreator(dt_);
 	out_ = new OutputManager(dt_, boundaryCellsSpatialMap_, conf_);
-
 }
 
 ManifoldManager::~ManifoldManager() {
@@ -176,7 +174,7 @@ void ManifoldManager::shrinkSeveralAtOnce(const std::set<index3>& enclosingVolum
 		long currentEnclosingVersion) {
 	chronoIsRegular_.reset();
 	functionProfileCounter_isRegular_ = 0;
-	Chronometer chronoQueueInit, chronoEnclosingCache, chronoEnclosingCheck, chronoAddAndCheckManifoldness;
+	Chronometer chronoQueueInit, chronoResourceInit, chronoAddAndCheckManifoldness;
 
 	// boundaryVertices will contain all the vertices on the boundary between the manifold and non manifold cells
 	std::set<Delaunay3::Vertex_handle> boundaryVertices;
@@ -198,7 +196,7 @@ void ManifoldManager::shrinkSeveralAtOnce(const std::set<index3>& enclosingVolum
 				Delaunay3::Cell_handle neighbour = boundaryCell->neighbor(faceIndex);
 
 				if (!neighbour->info().getManifoldFlag()) {
-					// Here neighbour is a non manifold cell and free space.
+					// Here neighbour is a non manifold cell.
 					// faceIndex is the index (in boundaryCell) of the face between boundaryCell and neighbour.
 					// Thus, faceIndex identifies the faces on the boundary
 
@@ -215,19 +213,104 @@ void ManifoldManager::shrinkSeveralAtOnce(const std::set<index3>& enclosingVolum
 
 	chronoQueueInit.stop();
 
+//#pragma omp parallel
+//	{
+//		// Code inside this region runs in parallel.
+//		printf("Hello!\n");
+//	}
+
+//#pragma omp for schedule(dynamic, 3)
+// for(int n=0; n<10; ++n) printf(" %d", n);
+// printf(".\n");
+
+	chronoResourceInit.start();
+
+	std::vector<std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>>> verticesResources;
+
+	for (auto v : boundaryVertices) {
+		std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>> v_r;
+		v_r.first = v;
+		std::vector<Delaunay3::Vertex_handle> adjacentVertices;
+		dt_.adjacent_vertices(v, std::back_inserter(adjacentVertices));
+		for (auto adjacentVertex : adjacentVertices)
+			dt_.incident_cells(adjacentVertex, std::inserter(v_r.second, v_r.second.begin()));
+
+		verticesResources.push_back(v_r);
+	}
+
+	chronoResourceInit.stop();
+
 	chronoAddAndCheckManifoldness.start();
+#pragma omp parallel
+	{
+		std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>> locked_v_r;
+
+		while (nextLockableVertex(locked_v_r, verticesResources)) {
+			subSeveralAndCheckManifoldness(locked_v_r.first);
+			unlockCells(locked_v_r);
+		}
+	}
 
 	// TODO check non boundary vertices instead? May be faster and more effective
-	for (auto v : boundaryVertices)
-		subSeveralAndCheckManifoldness(v);
-
+//	for (auto v : boundaryVertices) {
+//		subSeveralAndCheckManifoldness(v);
+//	}
 	chronoAddAndCheckManifoldness.stop();
 
 	if (conf_.timeStatsOutput) {
 		cout << "ManifoldManager::shrinkSeveralAtOnce:\t\t\t\t queue init:\t\t\t\t" << chronoQueueInit.getSeconds() << " s" << endl;
-		cout << "ManifoldManager::shrinkSeveralAtOnce:\t\t\t\t addAndCheckManifoldness:\t\t" << chronoAddAndCheckManifoldness.getSeconds() << " s" << endl;
+		cout << "ManifoldManager::shrinkSeveralAtOnce:\t\t\t\t resource init:\t\t\t\t" << chronoResourceInit.getSeconds() << " s" << endl;
+		cout << "ManifoldManager::shrinkSeveralAtOnce:\t\t\t\t addAndCheckManifoldness:\t\t" << chronoAddAndCheckManifoldness.getSeconds() << " s\t / \t" << boundaryVertices.size() << endl;
 		cout << "ManifoldManager::shrinkSeveralAtOnce:\t\t\t\t isRegular:\t\t\t\t" << chronoIsRegular_.getSeconds() << " s\t / \t" << functionProfileCounter_isRegular_ << endl;
 	}
+}
+
+//TODO
+
+bool ManifoldManager::nextLockableVertex(std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>>& vertex_lockedResources,
+		std::vector<std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>>>& verticesResources) {
+	bool lockableVertexFound = false;
+
+#pragma omp critical (cellLocking)
+	{
+//		cout << "T " << omp_get_thread_num() << " \t( " << omp_get_num_threads() << ")\tnextLockableVertex" << endl;
+
+		auto v_r = verticesResources.begin();
+		for (; v_r < verticesResources.end(); v_r++) {
+			std::set<Delaunay3::Cell_handle>& cells = (*v_r).second;
+			if (lockCells(cells)) {
+				vertex_lockedResources = *v_r;
+				lockableVertexFound = true;
+				break; // Lockable vertex found
+			}
+		}
+
+		if(lockableVertexFound) verticesResources.erase(v_r);
+	}
+
+	return lockableVertexFound;
+}
+
+bool ManifoldManager::lockCells(std::set<Delaunay3::Cell_handle>& lockingCells) {
+	bool canLock;
+//	cout << "T " << omp_get_thread_num() << " \t( " << omp_get_num_threads() << ")\tlockCells" << endl;
+	canLock = true;
+	for (auto c : lockingCells)
+		if (c->info().isLocked()) {
+			canLock = false;
+			break;
+		}
+
+	if (canLock) for (auto c : lockingCells)
+		c->info().lock();
+
+	return canLock;
+}
+
+void ManifoldManager::unlockCells(std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>>& vertex_lockedResources) {
+//	cout << "T " << omp_get_thread_num() << " \t( " << omp_get_num_threads() << ")\tunlockCells" << endl;
+	for (auto c : vertex_lockedResources.second)
+		c->info().unlock();
 }
 
 void ManifoldManager::initAndGrowManifold(Delaunay3::Cell_handle& startingCell,
@@ -885,7 +968,6 @@ bool ManifoldManager::isRegular(Delaunay3::Vertex_handle& v) {
 
 	// Here condition c is met.
 	// To test conditions c_1 and c_2 it's necessary to populate the graph.
-
 	std::unordered_set<Delaunay3::Vertex_handle> vOppositeBoundaryVertices;
 	std::unordered_map<Delaunay3::Vertex_handle, EdgePair> vertexToEdgesMap;
 
@@ -1263,15 +1345,15 @@ bool ManifoldManager::checkBoundaryIntegrity() {
 				result = false;
 				cerr << "\t\t tests failed on cell:" << endl;
 
-				if (!manifoldTest) cerr << "\t\t\t\t has vertex v st !isRegular(v)" << endl;
-				if (!isFreespace(boundaryCell)) cerr << "\t\t\t\t !isFreespace(boundaryCell)" << endl;
-				if (!isBoundaryCell(boundaryCell)) cerr << "\t\t\t\t !isBoundaryCell(boundaryCell)" << endl;
-				if (!boundaryCell->info().getManifoldFlag()) cerr << "\t\t\t\t !boundaryCell->info().getManifoldFlag()" << endl;
-				if (!boundaryCell->info().getBoundaryFlag()) cerr << "\t\t\t\t !boundaryCell->info().getBoundaryFlag()" << endl;
+				if (!manifoldTest) cerr << "\t\t\t\t\t has vertex v st !isRegular(v)" << endl;
+				if (!isFreespace(boundaryCell)) cerr << "\t\t\t\t\t !isFreespace(boundaryCell)" << endl;
+				if (!isBoundaryCell(boundaryCell)) cerr << "\t\t\t\t\t !isBoundaryCell(boundaryCell)" << endl;
+				if (!boundaryCell->info().getManifoldFlag()) cerr << "\t\t\t\t\t !boundaryCell->info().getManifoldFlag()" << endl;
+				if (!boundaryCell->info().getBoundaryFlag()) cerr << "\t\t\t\t\t !boundaryCell->info().getBoundaryFlag()" << endl;
 
 				cerr << "\t\t\t info on cell:" << endl;
 
-				cout << "\t\t\t\t points:";
+				cout << "\t\t\t\t\t points:";
 				for (int i = 0; i < 4; i++)
 					cout << "\t" << boundaryCell->vertex(i)->info().getPointId();
 				cout << endl;
@@ -1280,10 +1362,10 @@ bool ManifoldManager::checkBoundaryIntegrity() {
 		}
 	}
 
-	cout              << "#                checked " << count << ((count - 1) ? " cells" : " cell") << endl;
+	cout << "#                checked " << count << ((count - 1) ? " cells" : " cell") << endl;
 
 	if (!result) cout << "#########      Integrity Check FAILED!!!      #########" << endl << endl;
-	else cout         << "#                Integrity Check OK                   #" << endl << endl;
+	else cout << "#                Integrity Check OK                   #" << endl << endl;
 
 //	if (!result) throw new std::exception();
 	return result;

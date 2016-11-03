@@ -61,6 +61,10 @@ public:
 	bool exceedsFreeVoteThreshold(const float threshold) const;
 	bool isNotKeptByFreeVote(const float threshold) const;
 
+	bool isLocked() const;
+	void lock();
+	void unlock();
+
 private:
 
 	std::set<std::pair<int, int>> m_setIntersections;
@@ -70,12 +74,14 @@ private:
 	bool new_ = true;
 	bool boundary_ = false;
 	bool manifold_ = false;
-	
+
 	long enclosingVersion_ = -1;
 	bool inEnclosingVolume_ = false;
 
 	int rayTracingLastFacetIndex_ = -1;
 	
+	bool locked_ = false;
+
 };
 
 #endif /* DELAUNAY3DCELLINFO_H_ */

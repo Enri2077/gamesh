@@ -68,7 +68,7 @@ void TriangulationManager::updateTriangulation() {
 	Chronometer chronoCheck, chronoEverything;
 	chronoCheck.start();
 	chronoCheck.stop();
-	if (conf_.timeStatsOutput) cout << "TriangulationManager::updateTriangulation: \t\t min chrono time\t\t" << chronoCheck.getNanoseconds() << " ns" << endl;
+	if (conf_.timeStatsOutput) cout << "TriangulationManager::updateTriangulation: \t\t\t min chrono time\t\t\t" << chronoCheck.getNanoseconds() << " ns" << endl;
 
 	int addedPointsStat = 0, movedPointsStat = 0, updatedCamerasStat = updatedCamerasId_.size();
 
@@ -131,7 +131,7 @@ void TriangulationManager::updateTriangulation() {
 		if (conf_.timeStatsOutput) cout << "rayRemoving\t\tSkipped" << endl << endl;
 		timeStatsFile_ << 0.0 << ", ";
 	}
-	cout << "TriangulationManager::updateTriangulation:\t\t\t rays removed:\t\t\t\t " << raysRemovedCount << "\t/\t" << raysCandidateToBeRemovedCount << endl;
+	cout << "TriangulationManager::updateTriangulation:\t\t\t rays removed:\t\t\t\t" << raysRemovedCount << "\t /\t" << raysCandidateToBeRemovedCount << endl;
 
 	/*
 	 * 	Vertex removing based on min adjacent freeVote
@@ -1073,21 +1073,12 @@ void TriangulationManager::initSteinerPointGridAndBound() {
 			for (float z = sgCurrentMinZ_; z <= sgCurrentMaxZ_; z += stepZ_)
 				newPoints.push_back(pair<PointD3, Delaunay3DVertexInfo>(PointD3(x, y, z), Delaunay3DVertexInfo(nextSteinerPointId_--) ));
 
-//	for(auto p : newPoints){
-//		Delaunay3::Vertex_handle v = dt_.insert(p);
-//		v->info().setPointId(nextSteinerPointId_--); // Steiner point indices are negative and the next one is decremented
-//	}
-
 	dt_.insert(newPoints.begin(), newPoints.end());
 
-	Delaunay3::Finite_vertices_iterator vit;
-	  for (vit = dt_.finite_vertices_begin(); vit != dt_.finite_vertices_end(); ++vit)
-	    cout << vit->info().getPointId() << endl;
-
-	if (conf_.timeStatsOutput) cout << "TriangulationManager::initSteinerPointGridAndBound:   \t added Steiner points: \t\t\t" << newPoints.size() << endl;
-	if (conf_.timeStatsOutput) cout << "TriangulationManager::initSteinerPointGridAndBound:   \t total Steiner points: \t\t\t" << -nextSteinerPointId_-2 << endl;
-	if (conf_.timeStatsOutput) cout << "TriangulationManager::initSteinerPointGridAndBound:   \t Steiner grid side lengths: \t\t"
-			 << "x: "<< (sgCurrentMaxX_ - sgCurrentMinX_)+1 << "\ty: " << (sgCurrentMaxY_ - sgCurrentMinY_)+1 << "\tz: " << (sgCurrentMaxZ_ - sgCurrentMinZ_)+1 << endl;
+	if (conf_.timeStatsOutput) cout << "TriangulationManager::initSteinerPointGridAndBound:   \t\t added Steiner points: \t\t\t" << newPoints.size() << endl;
+	if (conf_.timeStatsOutput) cout << "TriangulationManager::initSteinerPointGridAndBound:   \t\t total Steiner points: \t\t\t" << -nextSteinerPointId_-2 << endl;
+	if (conf_.timeStatsOutput) cout << "TriangulationManager::initSteinerPointGridAndBound:   \t\t Steiner grid side lengths: \t\t"
+			 << "x: "<< (int)(sgCurrentMaxX_ - sgCurrentMinX_ + 1.5) << "\ty: " << (int)(sgCurrentMaxY_ - sgCurrentMinY_ + 1.5) << "\tz: " << (int)(sgCurrentMaxZ_ - sgCurrentMinZ_ + 1.5) << endl;
 }
 
 void TriangulationManager::updateSteinerPointGridAndBound() {
@@ -1154,10 +1145,10 @@ void TriangulationManager::updateSteinerPointGridAndBound() {
 //		v->info().setPointId(nextSteinerPointId_--); // Steiner point indices are negative and the next one is decremented
 //	}
 
-	if (conf_.timeStatsOutput) cout << "TriangulationManager::updateSteinerPointGridAndBound: \t added Steiner points: \t\t\t" << newPoints.size() << endl;
-	if (conf_.timeStatsOutput) cout << "TriangulationManager::initSteinerPointGridAndBound:   \t total Steiner points: \t\t\t" << -nextSteinerPointId_-2 << endl;
-	if (conf_.timeStatsOutput) cout << "TriangulationManager::updateSteinerPointGridAndBound: \t Steiner grid side lengths: \t\t"
-			 << "x: "<< (sgCurrentMaxX_ - sgCurrentMinX_)+1 << "\ty: " << (sgCurrentMaxY_ - sgCurrentMinY_)+1 << "\tz: " << (sgCurrentMaxZ_ - sgCurrentMinZ_)+1 << endl;
+	if (conf_.timeStatsOutput) cout << "TriangulationManager::updateSteinerPointGridAndBound: \t\t added Steiner points: \t\t\t" << newPoints.size() << endl;
+	if (conf_.timeStatsOutput) cout << "TriangulationManager::initSteinerPointGridAndBound:   \t\t total Steiner points: \t\t\t" << -nextSteinerPointId_-2 << endl;
+	if (conf_.timeStatsOutput) cout << "TriangulationManager::updateSteinerPointGridAndBound: \t\t Steiner grid side lengths: \t\t"
+			 << "x: "<< (int)(sgCurrentMaxX_ - sgCurrentMinX_ + 1.5) << "\ty: " << (int)(sgCurrentMaxY_ - sgCurrentMinY_ + 1.5) << "\tz: " << (int)(sgCurrentMaxZ_ - sgCurrentMinZ_ + 1.5) << endl;
 
 }
 

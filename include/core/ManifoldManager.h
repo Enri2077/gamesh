@@ -1,13 +1,11 @@
 #ifndef MANIFOLDMANAGER_H_
 #define MANIFOLDMANAGER_H_
 
-#include <iostream>
 #include <types_reconstructor.hpp>
 #include <types_config.hpp>
-//#include <OutputCreator.h>
 #include <OutputManager.h>
 #include <Chronometer.h>
-
+#include <iostream>
 
 class ManifoldManager {
 public:
@@ -49,12 +47,10 @@ public:
 		return out_;
 	}
 
-	Chronometer chronoInsertInBoundary_, chronoRemoveFromBoundary_, chronoIsRegularOverall_, chronoIsRegularOverall2_, chronoSingleTestOverall_;
+	Chronometer chronoInsertInBoundary_, chronoRemoveFromBoundary_, chronoIsRegularOverall_, chronoIsRegularOverall2_,
+			chronoSingleTestOverall_;
 
 private:
-
-	bool isInEnclosingVolume(Delaunay3::Cell_handle& c, const std::set<index3>& enclosingVolumeMapIndices,
-			const long& currentEnclosingVersion, Chronometer& chronoEnclosingCache, Chronometer& chronoEnclosingCheck);
 
 	/******************************************************/
 	/**************Manifold check functions****************/
@@ -66,6 +62,13 @@ private:
 	bool isRegular2(Delaunay3::Vertex_handle& v);
 	bool isRegularProfiled(Delaunay3::Vertex_handle& v);
 
+	bool isBoundaryCell(Delaunay3::Cell_handle& c);
+	bool isBoundaryCell(Delaunay3::Cell_handle& c, std::vector<int>& neighNotManifold);
+	bool isFreespace(Delaunay3::Cell_handle& c);
+
+	bool isInEnclosingVolume(Delaunay3::Cell_handle& c, const std::set<index3>& enclosingVolumeMapIndices,
+			const long& currentEnclosingVersion, Chronometer& chronoEnclosingCache, Chronometer& chronoEnclosingCheck);
+
 	/******************************************************/
 	/************Boundary update functions*****************/
 	/******************************************************/
@@ -76,19 +79,18 @@ private:
 	bool insertInBoundary(Delaunay3::Cell_handle& cellToTest);
 	bool removeFromBoundary(Delaunay3::Cell_handle& cellToBeRemoved);
 
-	bool isBoundaryCell(Delaunay3::Cell_handle& c);
-	bool isBoundaryCell(Delaunay3::Cell_handle& c, std::vector<int>& neighNotManifold);
-	bool isFreespace(Delaunay3::Cell_handle& c);
+//	bool nextLockableVertex(Delaunay3::Vertex_handle& v, const std::set<Delaunay3::Vertex_handle>& boundaryVertices);
+	bool nextLockableVertex(std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>>& vertex_lockedResources,
+			std::vector<std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>>>& verticesResources);
+	bool lockCells(std::set<Delaunay3::Cell_handle>& lockingCells);
+	void unlockCells(std::pair<Delaunay3::Vertex_handle, std::set<Delaunay3::Cell_handle>>& vertex_lockedResources);
 
 	Delaunay3& dt_;
 	std::map<index3, std::set<Delaunay3::Cell_handle>> boundaryCellsSpatialMap_;
 
 	ManifoldReconstructionConfig& conf_;
-//	OutputCreator* outputM_;
 	OutputManager* out_ = NULL;
 
-//	std::ofstream fileOut_;
-//	utilities::Logger logger_;
 	Chronometer chronoIsRegular_;
 	long functionProfileCounter_isRegular_ = 0;
 	int counter_ = 0;
